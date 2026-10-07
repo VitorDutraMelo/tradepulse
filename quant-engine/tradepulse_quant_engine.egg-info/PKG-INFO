@@ -1,0 +1,9 @@
+Metadata-Version: 2.4
+Name: tradepulse-quant-engine
+Version: 0.1.0
+Summary: Quantitative analysis engine for TradePulse.
+Requires-Python: <3.15,>=3.14
+Description-Content-Type: text/markdown
+Provides-Extra: dev
+Requires-Dist: pytest>=8.0; extra == "dev"
+Requires-Dist: ruff>=0.8; extra == "dev"

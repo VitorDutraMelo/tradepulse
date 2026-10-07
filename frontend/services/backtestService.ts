@@ -1,0 +1,1 @@
+import { BACKTEST_CURVE } from "@/data/mockData"; export const backtestService={async run(){await new Promise(r=>setTimeout(r,1200));return {total:142,wins:97,losses:45,winRate:68.3,drawdown:8.2,curve:BACKTEST_CURVE}}};
