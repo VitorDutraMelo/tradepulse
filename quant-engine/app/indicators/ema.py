@@ -1,23 +1,10 @@
 from collections.abc import Sequence
 
+from app.domain.candle import Candle
+
 
 def calculate_ema(values: Sequence[float], period: int) -> list[float]:
-    """Calculate the Exponential Moving Average (EMA).
-
-    The first EMA value is the Simple Moving Average (SMA) of the
-    first `period` values. Each next value gives greater weight to
-    the most recent price.
-
-    Args:
-        values: Numeric values in chronological order, oldest first.
-        period: Number of values used by the indicator.
-
-    Returns:
-        EMA values beginning at the point where enough data exists.
-
-    Raises:
-        ValueError: If the period is invalid or there is insufficient data.
-    """
+    """Calculate the Exponential Moving Average (EMA)."""
     if period <= 0:
         raise ValueError("period must be greater than zero")
 
@@ -33,3 +20,10 @@ def calculate_ema(values: Sequence[float], period: int) -> list[float]:
         ema_values.append(next_ema)
 
     return ema_values
+
+
+def calculate_close_ema(candles: Sequence[Candle], period: int) -> list[float]:
+    """Calculate EMA using the closing price of chronological candles."""
+    close_prices = [candle.close for candle in candles]
+
+    return calculate_ema(close_prices, period)
