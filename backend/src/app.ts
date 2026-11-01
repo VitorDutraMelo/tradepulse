@@ -3,16 +3,19 @@ import express from "express";
 import helmet from "helmet";
 
 import { env } from "./config/env";
+import { createIqOptionSignalRouter } from "./modules/iq-option-signals/iq-option-signal.router";
 import { createMarketAnalysisRouter } from "./modules/market-analysis/market-analysis.router";
 import {
   PythonQuantEngineClient,
   type QuantEngineClient,
+  type QuantEngineIqOptionSignalClient,
   type QuantEngineMarketDataClient,
 } from "./modules/market-analysis/python-quant-engine.client";
 import { createMarketDataRouter } from "./modules/market-data/market-data.router";
 
 type AppDependencies = {
   quantEngineClient?: QuantEngineClient;
+  quantEngineIqOptionSignalClient?: QuantEngineIqOptionSignalClient;
   quantEngineMarketDataClient?: QuantEngineMarketDataClient;
 };
 
@@ -27,6 +30,9 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   const quantEngineClient =
     dependencies.quantEngineClient ?? defaultQuantEngineClient;
+
+  const quantEngineIqOptionSignalClient =
+    dependencies.quantEngineIqOptionSignalClient ?? defaultQuantEngineClient;
 
   const quantEngineMarketDataClient =
     dependencies.quantEngineMarketDataClient ?? defaultQuantEngineClient;
@@ -54,6 +60,11 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use(
     "/api/v1/market-data",
     createMarketDataRouter(quantEngineMarketDataClient),
+  );
+
+  app.use(
+    "/api/v1/iq-option/signals",
+    createIqOptionSignalRouter(quantEngineIqOptionSignalClient),
   );
 
   return app;

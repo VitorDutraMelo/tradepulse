@@ -1,15 +1,20 @@
 ﻿import { execFile } from "node:child_process";
 
 import {
-  marketAnalysisResponseSchema,
-  type MarketAnalysisRequest,
-  type MarketAnalysisResponse,
-} from "./market-analysis.schema";
+  iqOptionSignalResponseSchema,
+  type IqOptionSignalRequest,
+  type IqOptionSignalResponse,
+} from "../iq-option-signals/iq-option-signal.schema";
 import {
   marketCandlesResponseSchema,
   type MarketCandlesRequest,
   type MarketCandlesResponse,
 } from "../market-data/market-data.schema";
+import {
+  marketAnalysisResponseSchema,
+  type MarketAnalysisRequest,
+  type MarketAnalysisResponse,
+} from "./market-analysis.schema";
 
 export type QuantEngineCommandOptions = {
   cwd: string;
@@ -35,6 +40,12 @@ export interface QuantEngineClient {
 
 export interface QuantEngineMarketDataClient {
   getCandles(input: MarketCandlesRequest): Promise<MarketCandlesResponse>;
+}
+
+export interface QuantEngineIqOptionSignalClient {
+  prepareIqOptionSignal(
+    input: IqOptionSignalRequest,
+  ): Promise<IqOptionSignalResponse>;
 }
 
 export type PythonQuantEngineClientConfig = {
@@ -77,7 +88,10 @@ const nodeQuantEngineRunner: QuantEngineRunner = {
 };
 
 export class PythonQuantEngineClient
-  implements QuantEngineClient, QuantEngineMarketDataClient
+  implements
+    QuantEngineClient,
+    QuantEngineMarketDataClient,
+    QuantEngineIqOptionSignalClient
 {
   constructor(
     private readonly config: PythonQuantEngineClientConfig,
@@ -128,6 +142,33 @@ export class PythonQuantEngineClient
     if (!parsedPayload.success) {
       throw new QuantEngineClientError(
         "The Quant Engine returned an invalid market candles payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async prepareIqOptionSignal(
+    input: IqOptionSignalRequest,
+  ): Promise<IqOptionSignalResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.prepare_iq_option_signal",
+      "--symbol",
+      input.symbol,
+      "--timeframe",
+      input.timeframe,
+      "--limit",
+      String(input.limit),
+      "--market",
+      input.market,
+    ]);
+
+    const parsedPayload = iqOptionSignalResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option signal payload.",
       );
     }
 
