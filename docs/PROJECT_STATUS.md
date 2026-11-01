@@ -24,11 +24,11 @@ Binance Spot public market data
 Implemented
 Quant Engine
 - Validated Candle domain model.
-- Validated internal Signal model.
-- Market data provider abstraction.
+- Validated internal Signal domain model.
+- Market-data provider abstraction.
 - MockMarketDataProvider for deterministic tests.
 - BinanceMarketDataProvider using public Spot market data.
-- Protection against using incomplete Binance candles.
+- Protection against incomplete Binance candles.
 - EMA indicator.
 - EMA 9/21 crossover strategy.
 - Internal directions: LONG, SHORT, and NEUTRAL.
@@ -38,23 +38,41 @@ Quant Engine
   - JSON success payload on stdout.
   - Structured JSON error payload on stderr.
 Backend API
-- Node.js, TypeScript, Express, Helmet, CORS, Zod.
+- Node.js, TypeScript, Express, Helmet, CORS, and Zod.
 - Environment validation.
 - Health endpoint:
   GET /api/v1/health
-- Real market analysis endpoint:
+- Real market-analysis endpoint:
   GET /api/v1/market-analysis?symbol=BTC-USDT&timeframe=1h&limit=100
-- Secure Node → Python communication through execFile.
-- Separate command arguments without shell string concatenation.
+- Safe Node → Python communication through execFile.
+- Separate command arguments without shell-string concatenation.
 - Configurable process timeout.
-- Validation of both request input and Python response output.
+- Validation of request input and Python response output.
+- Supports both BTC-USDT and BTC/USD input formats.
+- Slash-separated symbols are normalized to the internal BASE-QUOTE format before reaching the Quant Engine.
+Frontend
+- Existing React dashboard preserved.
+- Typed frontend client for the real market-analysis endpoint.
+- Live analysis panel connected to the backend.
+- Loading, retry, and API-error states.
+- Displays real:
+  - Asset.
+  - Timeframe.
+  - Internal direction.
+  - Technical score.
+  - Last closed-candle timestamp in UTC.
+  - Data source.
+  - Strategy.
+  - EMA periods.
+  - Decision reasons.
+- The live panel explicitly states that LONG, SHORT, and NEUTRAL are internal analysis outcomes and do not automatically mean CALL, PUT, or WAIT.
 Current API Contract
 Successful responses use this format:
 {
   "data": {
-    "symbol": "BTC-USDT",
+    "symbol": "BTC-USD",
     "timeframe": "1h",
-    "timestamp": "2026-11-01T12:00:00+00:00",
+    "timestamp": "2026-11-01T14:00:00+00:00",
     "direction": "NEUTRAL",
     "score": 20,
     "reasons": [
@@ -69,32 +87,50 @@ Successful responses use this format:
   }
 }
 
-score represents technical-rule confluence only. It is not a probability of success or expected profit.
+score represents technical-rule confluence only. It is not a probability of success, expected profit, or recommendation to trade.
 Validation Status
 - Python: 51 automated tests passing.
 - Python Ruff: passing.
-- Node.js: 6 automated tests passing.
+- Node.js: 7 automated tests passing.
 - Node.js typecheck: passing.
 - Node.js build: passing.
-- Real end-to-end analysis verified through the Node API and Binance Spot data.
+- Frontend ESLint: passing.
+- Frontend build: passing.
+- Real end-to-end analysis verified through:
+  - Frontend request format: BTC/USD.
+  - Backend normalization: BTC/USD → BTC-USD.
+  - Quant Engine.
+  - Binance Spot public market data.
+Current UI Data Boundary
+Only the Análise atual panel consumes the real backend endpoint.
+
+The following dashboard elements are still based on local demonstration data and must not be presented as live market data:
+- Candlestick chart.
+- RSI chart.
+- MACD chart.
+- Asset-strip prices and variations.
+- Scanner signals and scores.
+- Signal history.
+- Backtest metrics and performance curve.
+- Technical-indicator summary cards.
 Product Direction
 TradePulse is being prepared for multiple market-data providers:
-- Cryptocurrency
-- Forex
-- Indices
-- Commodities
-- Platform-specific OTC assets, only when reliable and authorized data is available
+- Cryptocurrency.
+- Forex.
+- Indices.
+- Commodities.
+- Platform-specific OTC assets, only when reliable and authorized data is available.
 The current LONG, SHORT, and NEUTRAL values are internal market-analysis outcomes.
 
 Future IQ Option-oriented signals will use a separate product layer with:
-- CALL
-- PUT
-- WAIT
-- Platform-specific asset identification
-- Entry time
-- Expiration
-- Rationale
-- Risk controls
+- CALL.
+- PUT.
+- WAIT.
+- Platform-specific asset identification.
+- Entry time.
+- Expiration.
+- Rationale.
+- Risk controls.
 A Binance LONG must never be treated automatically as an IQ Option CALL. OTC prices must not be inferred from other markets.
 Explicitly Not Implemented
 - IQ Option login or automation.
@@ -105,7 +141,9 @@ Explicitly Not Implemented
 - Paper trading.
 - PostgreSQL persistence.
 - Authentication and user accounts.
-- Alerts and historical dashboard.
+- Real historical dashboard.
+- Real market chart endpoint.
+- Alerts.
 
 `docs/ROADMAP.md`
 
@@ -118,4 +156,5 @@ Explicitly Not Implemented
 - Keep data provenance explicit.
 - Never present technical scores as win probabilities.
 - Preserve separation between internal analysis directions and platform-specific trade actions.
-- Validate strategies through backtesting and simulation before any
+- Validate strategies through backtesting and simulation before any real-operation discussion.
+- Do not represent mock data as live market data.

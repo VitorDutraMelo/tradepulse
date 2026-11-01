@@ -23,13 +23,21 @@
 - Node.js API bootstrap.
 - Secure Node → Python bridge.
 - Real Binance analysis endpoint.
+- Input validation and request normalization for BTC-USDT and BTC/USD.
+- Frontend typed API client.
+- Frontend live-analysis panel.
+- Frontend loading, retry, and error states.
+- Display of source, timestamp, direction, score, reasons, strategy, and EMA periods.
 
 ### Next
 
-- Frontend API client for the real analysis endpoint.
-- Display source, timestamp, direction, score, reasons, strategy, and EMA periods.
-- Loading, error, and stale-data states.
-- Shared frontend/backend TypeScript contract.
+- Real candle-data endpoint for the frontend chart.
+- Provider capability metadata and asset catalog.
+- Explicit frontend status for supported and unsupported assets.
+- Replace mock chart values with data from the selected provider.
+- Data freshness and stale-data handling.
+- Frontend automated tests for the API client and live-analysis panel.
+- Shared frontend/backend contract package or generated contract.
 
 ## Phase 2 — Market Provider Expansion
 
@@ -107,3 +115,4 @@ Before any discussion of order execution, the project must evaluate:
 - Operational risk.
 - Strategy validation results.
 - Paper-trading results.
+

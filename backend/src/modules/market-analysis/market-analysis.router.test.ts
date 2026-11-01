@@ -46,6 +46,26 @@ describe("GET /api/v1/market-analysis", () => {
     });
   });
 
+  it("accepts a slash-separated symbol and normalizes it", async () => {
+    const analyze = vi.fn().mockResolvedValue(validAnalysisPayload);
+    const quantEngineClient: QuantEngineClient = { analyze };
+    const app = createApp({ quantEngineClient });
+
+    await request(app)
+      .get("/api/v1/market-analysis")
+      .query({
+        symbol: "BTC/USD",
+        timeframe: "1h",
+      })
+      .expect(200);
+
+    expect(analyze).toHaveBeenCalledWith({
+      symbol: "BTC-USD",
+      timeframe: "1h",
+      limit: 100,
+    });
+  });
+
   it("rejects an invalid request before calling the Quant Engine", async () => {
     const analyze = vi.fn();
     const quantEngineClient: QuantEngineClient = { analyze };

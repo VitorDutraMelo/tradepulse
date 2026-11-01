@@ -4,12 +4,12 @@
   "description": "TradePulse backend API",
   "main": "dist/server.js",
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run src",
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test:watch": "vitest"
+    "test:watch": "vitest src"
   },
   "keywords": [],
   "author": "",

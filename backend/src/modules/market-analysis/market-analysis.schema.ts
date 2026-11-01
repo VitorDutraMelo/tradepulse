@@ -6,9 +6,10 @@ export const marketAnalysisRequestSchema = z.object({
     .trim()
     .toUpperCase()
     .regex(
-      /^[A-Z0-9]+-[A-Z0-9]+$/,
-      "symbol must follow the BASE-QUOTE format, such as BTC-USDT",
-    ),
+      /^[A-Z0-9]+[-/][A-Z0-9]+$/,
+      "symbol must follow the BASE-QUOTE format, such as BTC-USDT or BTC/USD",
+    )
+    .transform((symbol) => symbol.replace("/", "-")),
   timeframe: z.enum([
     "1m",
     "3m",

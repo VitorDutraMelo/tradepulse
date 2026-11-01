@@ -1,8 +1,8 @@
 import { Router } from "express";
 
 import {
-  type QuantEngineClient,
   QuantEngineClientError,
+  type QuantEngineClient,
 } from "./python-quant-engine.client";
 import { marketAnalysisRequestSchema } from "./market-analysis.schema";
 
