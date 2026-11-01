@@ -7,22 +7,29 @@ import { createMarketAnalysisRouter } from "./modules/market-analysis/market-ana
 import {
   PythonQuantEngineClient,
   type QuantEngineClient,
+  type QuantEngineMarketDataClient,
 } from "./modules/market-analysis/python-quant-engine.client";
+import { createMarketDataRouter } from "./modules/market-data/market-data.router";
 
 type AppDependencies = {
   quantEngineClient?: QuantEngineClient;
+  quantEngineMarketDataClient?: QuantEngineMarketDataClient;
 };
 
 export function createApp(dependencies: AppDependencies = {}) {
   const app = express();
 
+  const defaultQuantEngineClient = new PythonQuantEngineClient({
+    pythonExecutable: env.QUANT_ENGINE_PYTHON,
+    workingDirectory: env.QUANT_ENGINE_WORKING_DIRECTORY,
+    timeoutMs: env.QUANT_ENGINE_TIMEOUT_MS,
+  });
+
   const quantEngineClient =
-    dependencies.quantEngineClient ??
-    new PythonQuantEngineClient({
-      pythonExecutable: env.QUANT_ENGINE_PYTHON,
-      workingDirectory: env.QUANT_ENGINE_WORKING_DIRECTORY,
-      timeoutMs: env.QUANT_ENGINE_TIMEOUT_MS,
-    });
+    dependencies.quantEngineClient ?? defaultQuantEngineClient;
+
+  const quantEngineMarketDataClient =
+    dependencies.quantEngineMarketDataClient ?? defaultQuantEngineClient;
 
   app.use(helmet());
   app.use(
@@ -42,6 +49,11 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use(
     "/api/v1/market-analysis",
     createMarketAnalysisRouter(quantEngineClient),
+  );
+
+  app.use(
+    "/api/v1/market-data",
+    createMarketDataRouter(quantEngineMarketDataClient),
   );
 
   return app;

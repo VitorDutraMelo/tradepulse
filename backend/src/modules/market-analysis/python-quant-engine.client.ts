@@ -1,10 +1,15 @@
-import { execFile } from "node:child_process";
+﻿import { execFile } from "node:child_process";
 
 import {
   marketAnalysisResponseSchema,
   type MarketAnalysisRequest,
   type MarketAnalysisResponse,
 } from "./market-analysis.schema";
+import {
+  marketCandlesResponseSchema,
+  type MarketCandlesRequest,
+  type MarketCandlesResponse,
+} from "../market-data/market-data.schema";
 
 export type QuantEngineCommandOptions = {
   cwd: string;
@@ -26,6 +31,10 @@ export interface QuantEngineRunner {
 
 export interface QuantEngineClient {
   analyze(input: MarketAnalysisRequest): Promise<MarketAnalysisResponse>;
+}
+
+export interface QuantEngineMarketDataClient {
+  getCandles(input: MarketCandlesRequest): Promise<MarketCandlesResponse>;
 }
 
 export type PythonQuantEngineClientConfig = {
@@ -67,7 +76,9 @@ const nodeQuantEngineRunner: QuantEngineRunner = {
   },
 };
 
-export class PythonQuantEngineClient implements QuantEngineClient {
+export class PythonQuantEngineClient
+  implements QuantEngineClient, QuantEngineMarketDataClient
+{
   constructor(
     private readonly config: PythonQuantEngineClientConfig,
     private readonly runner: QuantEngineRunner = nodeQuantEngineRunner,
@@ -76,7 +87,7 @@ export class PythonQuantEngineClient implements QuantEngineClient {
   async analyze(
     input: MarketAnalysisRequest,
   ): Promise<MarketAnalysisResponse> {
-    const arguments_ = [
+    const rawPayload = await this.runCli([
       "-m",
       "app.cli.analyze_market",
       "--symbol",
@@ -85,8 +96,45 @@ export class PythonQuantEngineClient implements QuantEngineClient {
       input.timeframe,
       "--limit",
       String(input.limit),
-    ];
+    ]);
 
+    const parsedPayload = marketAnalysisResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid analysis payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async getCandles(
+    input: MarketCandlesRequest,
+  ): Promise<MarketCandlesResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_candles",
+      "--symbol",
+      input.symbol,
+      "--timeframe",
+      input.timeframe,
+      "--limit",
+      String(input.limit),
+    ]);
+
+    const parsedPayload = marketCandlesResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid market candles payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  private async runCli(arguments_: string[]): Promise<unknown> {
     let result: QuantEngineCommandResult;
 
     try {
@@ -101,7 +149,7 @@ export class PythonQuantEngineClient implements QuantEngineClient {
     } catch (error) {
       throw new QuantEngineClientError(
         this.extractProcessErrorMessage(error) ??
-          "The Quant Engine could not complete the analysis.",
+          "The Quant Engine could not complete the request.",
       );
     }
 
@@ -112,25 +160,13 @@ export class PythonQuantEngineClient implements QuantEngineClient {
       );
     }
 
-    let rawPayload: unknown;
-
     try {
-      rawPayload = JSON.parse(result.stdout);
+      return JSON.parse(result.stdout);
     } catch {
       throw new QuantEngineClientError(
         "The Quant Engine returned invalid JSON.",
       );
     }
-
-    const parsedPayload = marketAnalysisResponseSchema.safeParse(rawPayload);
-
-    if (!parsedPayload.success) {
-      throw new QuantEngineClientError(
-        "The Quant Engine returned an invalid analysis payload.",
-      );
-    }
-
-    return parsedPayload.data;
   }
 
   private extractProcessErrorMessage(error: unknown): string | undefined {

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+﻿import { describe, expect, it, vi } from "vitest";
 
 import {
   PythonQuantEngineClient,
@@ -20,8 +20,24 @@ const validAnalysisPayload = {
   },
 };
 
+const validCandlesPayload = {
+  symbol: "BTC-USDT",
+  timeframe: "1h",
+  source: "binance_spot",
+  candles: [
+    {
+      timestamp: "2026-11-01T12:00:00+00:00",
+      open: 77962.63,
+      high: 78025.53,
+      low: 77749.09,
+      close: 77890.02,
+      volume: 408.2493,
+    },
+  ],
+};
+
 describe("PythonQuantEngineClient", () => {
-  it("runs the CLI with a fixed command and separate arguments", async () => {
+  it("runs the analysis CLI with fixed command arguments", async () => {
     const runner: QuantEngineRunner = {
       run: vi.fn().mockResolvedValue({
         stdout: JSON.stringify(validAnalysisPayload),
@@ -49,6 +65,48 @@ describe("PythonQuantEngineClient", () => {
       [
         "-m",
         "app.cli.analyze_market",
+        "--symbol",
+        "BTC-USDT",
+        "--timeframe",
+        "1h",
+        "--limit",
+        "100",
+      ],
+      {
+        cwd: "C:/tradepulse/quant-engine",
+        timeoutMs: 15000,
+      },
+    );
+  });
+
+  it("runs the market-candles CLI with fixed command arguments", async () => {
+    const runner: QuantEngineRunner = {
+      run: vi.fn().mockResolvedValue({
+        stdout: JSON.stringify(validCandlesPayload),
+        stderr: "",
+      }),
+    };
+    const client = new PythonQuantEngineClient(
+      {
+        pythonExecutable: "python.exe",
+        workingDirectory: "C:/tradepulse/quant-engine",
+        timeoutMs: 15000,
+      },
+      runner,
+    );
+
+    const result = await client.getCandles({
+      symbol: "BTC-USDT",
+      timeframe: "1h",
+      limit: 100,
+    });
+
+    expect(result).toEqual(validCandlesPayload);
+    expect(runner.run).toHaveBeenCalledWith(
+      "python.exe",
+      [
+        "-m",
+        "app.cli.get_candles",
         "--symbol",
         "BTC-USDT",
         "--timeframe",
@@ -111,7 +169,7 @@ describe("PythonQuantEngineClient", () => {
     );
 
     await expect(
-      client.analyze({
+      client.getCandles({
         symbol: "BTC-USDT",
         timeframe: "1h",
         limit: 100,
