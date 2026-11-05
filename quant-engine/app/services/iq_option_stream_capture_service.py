@@ -52,10 +52,16 @@ class IqOptionStreamCaptureService:
         self,
         symbol: str,
         max_events: int | None = None,
+        stop_at: datetime | None = None,
     ) -> IqOptionStreamCaptureResult:
-        """Capture stream data until it ends or the event limit is reached."""
+        """Capture stream data until it ends, reaches a limit or reaches stop_at."""
 
         normalized_symbol = symbol.strip().upper()
+        stop_at_utc = (
+            self._to_utc_timestamp(stop_at, "stop_at")
+            if stop_at is not None
+            else None
+        )
 
         if not normalized_symbol:
             raise ValueError("symbol cannot be empty")
@@ -75,6 +81,9 @@ class IqOptionStreamCaptureService:
 
         try:
             for stream_event in self._stream.iter_events(normalized_symbol):
+                if stop_at_utc is not None and self._now_utc() >= stop_at_utc:
+                    break
+
                 self._session_repository.record_stream_event(stream_event)
                 event_count += 1
 
@@ -129,9 +138,19 @@ class IqOptionStreamCaptureService:
             raise
 
     def _now_utc(self) -> datetime:
-        current_time = self._now()
+        return self._to_utc_timestamp(
+            self._now(),
+            "capture clock",
+        )
 
-        if current_time.tzinfo is None or current_time.utcoffset() is None:
-            raise ValueError("capture clock must return a timezone-aware datetime")
+    @staticmethod
+    def _to_utc_timestamp(
+        value: datetime,
+        field_name: str,
+    ) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError(
+                f"{field_name} must be a timezone-aware datetime"
+            )
 
-        return current_time.astimezone(UTC)
+        return value.astimezone(UTC)

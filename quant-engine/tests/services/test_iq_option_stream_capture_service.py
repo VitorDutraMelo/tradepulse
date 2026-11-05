@@ -4,12 +4,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from app.services.iq_option_stream_capture_service import (
-    IqOptionStreamCaptureService,
-)
 
 from app.repositories.iq_option_session_repository import (
     IqOptionSessionRepository,
+)
+from app.services.iq_option_stream_capture_service import (
+    IqOptionStreamCaptureService,
 )
 from app.services.one_minute_candle_builder import OneMinuteCandleBuilder
 from app.streams.otcharts_iq_option_stream import OtchartsIqOptionStreamEvent
@@ -160,6 +160,56 @@ def test_stops_after_requested_event_limit(tmp_path: Path) -> None:
     assert manifest["candleCount"] == 1
 
 
+def test_stops_when_the_capture_deadline_has_elapsed(tmp_path: Path) -> None:
+    events = [
+        create_tick_event(
+            datetime(2026, 11, 2, 10, 0, 2, tzinfo=UTC),
+            1.1000,
+        ),
+        create_tick_event(
+            datetime(2026, 11, 2, 10, 1, 1, tzinfo=UTC),
+            1.1010,
+        ),
+    ]
+    clock_values = iter(
+        [
+            datetime(2026, 11, 2, 10, 0, 59, tzinfo=UTC),
+            datetime(2026, 11, 2, 10, 1, tzinfo=UTC),
+            datetime(2026, 11, 2, 10, 1, tzinfo=UTC),
+        ]
+    )
+    repository = create_repository(tmp_path)
+    service = IqOptionStreamCaptureService(
+        stream=FakeEventSource(events),
+        candle_builder=OneMinuteCandleBuilder("EURUSD-OTC"),
+        session_repository=repository,
+        now=lambda: next(clock_values),
+    )
+
+    result = service.capture(
+        "EURUSD-OTC",
+        stop_at=datetime(2026, 11, 2, 10, 1, tzinfo=UTC),
+    )
+
+    manifest = read_json(repository.manifest_path)
+
+    assert result.status == "completed"
+    assert result.event_count == 1
+    assert result.tick_count == 1
+    assert result.candle_count == 1
+    assert result.finished_at == datetime(
+        2026,
+        11,
+        2,
+        10,
+        1,
+        tzinfo=UTC,
+    )
+    assert manifest["eventCount"] == 1
+    assert manifest["tickCount"] == 1
+    assert manifest["candleCount"] == 1
+
+
 def test_records_error_and_closes_failed_session(tmp_path: Path) -> None:
     first_event = create_tick_event(
         datetime(2026, 11, 2, 10, 0, 2, tzinfo=UTC),
@@ -203,4 +253,10 @@ def test_rejects_invalid_capture_configuration(tmp_path: Path) -> None:
         service.capture(
             "EURUSD-OTC",
             max_events=0,
+        )
+
+    with pytest.raises(ValueError, match="stop_at must be a timezone-aware"):
+        service.capture(
+            "EURUSD-OTC",
+            stop_at=datetime(2026, 11, 2, 10, 1),
         )
