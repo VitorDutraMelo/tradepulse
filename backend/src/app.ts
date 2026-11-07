@@ -3,11 +3,13 @@ import express from "express";
 import helmet from "helmet";
 
 import { env } from "./config/env";
+import { createIqOptionDemoAnalysisRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis.router";
 import { createIqOptionSignalRouter } from "./modules/iq-option-signals/iq-option-signal.router";
 import { createMarketAnalysisRouter } from "./modules/market-analysis/market-analysis.router";
 import {
   PythonQuantEngineClient,
   type QuantEngineClient,
+  type QuantEngineIqOptionDemoAnalysisClient,
   type QuantEngineIqOptionSignalClient,
   type QuantEngineMarketDataClient,
 } from "./modules/market-analysis/python-quant-engine.client";
@@ -15,6 +17,7 @@ import { createMarketDataRouter } from "./modules/market-data/market-data.router
 
 type AppDependencies = {
   quantEngineClient?: QuantEngineClient;
+  quantEngineIqOptionDemoAnalysisClient?: QuantEngineIqOptionDemoAnalysisClient;
   quantEngineIqOptionSignalClient?: QuantEngineIqOptionSignalClient;
   quantEngineMarketDataClient?: QuantEngineMarketDataClient;
 };
@@ -30,6 +33,10 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   const quantEngineClient =
     dependencies.quantEngineClient ?? defaultQuantEngineClient;
+
+  const quantEngineIqOptionDemoAnalysisClient =
+    dependencies.quantEngineIqOptionDemoAnalysisClient ??
+    defaultQuantEngineClient;
 
   const quantEngineIqOptionSignalClient =
     dependencies.quantEngineIqOptionSignalClient ?? defaultQuantEngineClient;
@@ -65,6 +72,11 @@ export function createApp(dependencies: AppDependencies = {}) {
   app.use(
     "/api/v1/iq-option/signals",
     createIqOptionSignalRouter(quantEngineIqOptionSignalClient),
+  );
+
+  app.use(
+    "/api/v1/iq-option/demo/market-analysis",
+    createIqOptionDemoAnalysisRouter(quantEngineIqOptionDemoAnalysisClient),
   );
 
   return app;

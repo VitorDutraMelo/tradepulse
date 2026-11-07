@@ -1,6 +1,11 @@
 ﻿import { execFile } from "node:child_process";
 
 import {
+  iqOptionDemoAnalysisResponseSchema,
+  type IqOptionDemoAnalysisRequest,
+  type IqOptionDemoAnalysisResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-analysis.schema";
+import {
   iqOptionSignalResponseSchema,
   type IqOptionSignalRequest,
   type IqOptionSignalResponse,
@@ -48,6 +53,12 @@ export interface QuantEngineIqOptionSignalClient {
   ): Promise<IqOptionSignalResponse>;
 }
 
+export interface QuantEngineIqOptionDemoAnalysisClient {
+  analyzeIqOptionDemo(
+    input: IqOptionDemoAnalysisRequest,
+  ): Promise<IqOptionDemoAnalysisResponse>;
+}
+
 export type PythonQuantEngineClientConfig = {
   pythonExecutable: string;
   workingDirectory: string;
@@ -91,7 +102,8 @@ export class PythonQuantEngineClient
   implements
     QuantEngineClient,
     QuantEngineMarketDataClient,
-    QuantEngineIqOptionSignalClient
+    QuantEngineIqOptionSignalClient,
+    QuantEngineIqOptionDemoAnalysisClient
 {
   constructor(
     private readonly config: PythonQuantEngineClientConfig,
@@ -169,6 +181,32 @@ export class PythonQuantEngineClient
     if (!parsedPayload.success) {
       throw new QuantEngineClientError(
         "The Quant Engine returned an invalid IQ Option signal payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async analyzeIqOptionDemo(
+    input: IqOptionDemoAnalysisRequest,
+  ): Promise<IqOptionDemoAnalysisResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.analyze_iq_option_market",
+      "--symbol",
+      input.symbol,
+      "--timeframe",
+      input.timeframe,
+      "--limit",
+      String(input.limit),
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoAnalysisResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option demo analysis payload.",
       );
     }
 
