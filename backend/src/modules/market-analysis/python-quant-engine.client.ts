@@ -1,4 +1,4 @@
-﻿import { execFile } from "node:child_process";
+import { execFile } from "node:child_process";
 
 import {
   iqOptionDemoAnalysisHistoryResponseSchema,
@@ -338,5 +338,3 @@ export class PythonQuantEngineClient
     }
   }
 }
-
-

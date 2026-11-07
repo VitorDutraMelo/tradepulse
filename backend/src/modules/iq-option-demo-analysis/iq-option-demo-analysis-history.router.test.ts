@@ -191,4 +191,3 @@ describe("GET /api/v1/iq-option/demo/analyses", () => {
     });
   });
 });
-

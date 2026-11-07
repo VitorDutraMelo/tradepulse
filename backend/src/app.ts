@@ -1,4 +1,4 @@
-﻿import cors from "cors";
+import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 
@@ -95,6 +95,3 @@ export function createApp(dependencies: AppDependencies = {}) {
 }
 
 export const app = createApp();
-
-
-
