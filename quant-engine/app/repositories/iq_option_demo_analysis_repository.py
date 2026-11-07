@@ -1,5 +1,6 @@
 import json
 import re
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
@@ -9,7 +10,7 @@ from app.domain.signal import Signal
 
 
 class IqOptionDemoAnalysisRepository:
-    """Persist read-only IQ Option DEMO analyses and their closed candles."""
+    """Persist and read IQ Option DEMO analyses with their closed candles."""
 
     source = "iq_option_demo"
     venue = "iq"
@@ -93,6 +94,47 @@ class IqOptionDemoAnalysisRepository:
 
         return record_path
 
+    def list_summaries(
+        self,
+        limit: int,
+    ) -> tuple[dict[str, object], ...]:
+        """Return the newest local analysis summaries without candle payloads."""
+
+        if isinstance(limit, bool) or limit <= 0:
+            raise ValueError("limit must be greater than zero")
+
+        if not self._root_directory.exists():
+            return ()
+
+        record_paths = sorted(
+            self._root_directory.glob("iq-demo-*.json"),
+            key=lambda path: path.name,
+            reverse=True,
+        )
+
+        return tuple(
+            self._record_to_summary(self._read_record(record_path))
+            for record_path in record_paths[:limit]
+        )
+
+    def get_record(self, record_id: str) -> dict[str, object]:
+        """Return one complete analysis record, including closed candles."""
+
+        normalized_record_id = record_id.strip()
+
+        if not self._record_id_pattern.fullmatch(normalized_record_id):
+            raise ValueError("record_id has an invalid format")
+
+        record_path = self._root_directory / f"{normalized_record_id}.json"
+
+        if not record_path.is_file():
+            raise FileNotFoundError(
+                f"IQ Option DEMO analysis record was not found: "
+                f"{normalized_record_id}"
+            )
+
+        return self._read_record(record_path)
+
     @classmethod
     def _create_record_id(
         cls,
@@ -127,6 +169,94 @@ class IqOptionDemoAnalysisRepository:
             encoding="utf-8",
         )
         temporary_path.replace(record_path)
+
+    @classmethod
+    def _read_record(cls, record_path: Path) -> dict[str, object]:
+        try:
+            payload = json.loads(record_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(
+                f"IQ Option DEMO analysis record is unreadable: "
+                f"{record_path.name}"
+            ) from error
+
+        if not isinstance(payload, dict):
+            raise ValueError(
+                f"IQ Option DEMO analysis record is invalid: "
+                f"{record_path.name}"
+            )
+
+        cls._validate_record(
+            payload=payload,
+            expected_record_id=record_path.stem,
+        )
+
+        return payload
+
+    @classmethod
+    def _validate_record(
+        cls,
+        payload: dict[str, object],
+        expected_record_id: str,
+    ) -> None:
+        analysis = payload.get("analysis")
+        candles = payload.get("candles")
+
+        if (
+            payload.get("schemaVersion") != 1
+            or payload.get("recordId") != expected_record_id
+            or not isinstance(payload.get("recordedAt"), str)
+            or payload.get("source") != cls.source
+            or payload.get("venue") != cls.venue
+            or payload.get("accountMode") != cls.account_mode
+            or not isinstance(analysis, Mapping)
+            or not isinstance(candles, list)
+        ):
+            raise ValueError(
+                f"IQ Option DEMO analysis record is invalid: "
+                f"{expected_record_id}.json"
+            )
+
+        required_analysis_fields = (
+            "symbol",
+            "timeframe",
+            "timestamp",
+            "direction",
+            "score",
+            "reasons",
+            "strategy",
+            "indicators",
+        )
+
+        if any(field not in analysis for field in required_analysis_fields):
+            raise ValueError(
+                f"IQ Option DEMO analysis record is invalid: "
+                f"{expected_record_id}.json"
+            )
+
+    @classmethod
+    def _record_to_summary(
+        cls,
+        record: dict[str, object],
+    ) -> dict[str, object]:
+        analysis = record["analysis"]
+
+        if not isinstance(analysis, Mapping):
+            raise RuntimeError("validated IQ Option DEMO record has no analysis")
+
+        return {
+            "recordId": record["recordId"],
+            "recordedAt": record["recordedAt"],
+            "source": record["source"],
+            "venue": record["venue"],
+            "accountMode": record["accountMode"],
+            "symbol": analysis["symbol"],
+            "timeframe": analysis["timeframe"],
+            "timestamp": analysis["timestamp"],
+            "direction": analysis["direction"],
+            "score": analysis["score"],
+            "strategy": analysis["strategy"],
+        }
 
     @classmethod
     def _candle_to_payload(

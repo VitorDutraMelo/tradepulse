@@ -1,6 +1,15 @@
 ﻿import { execFile } from "node:child_process";
 
 import {
+  iqOptionDemoAnalysisHistoryResponseSchema,
+  iqOptionDemoAnalysisRecordResponseSchema,
+  type IqOptionDemoAnalysisHistoryRequest,
+  type IqOptionDemoAnalysisHistoryResponse,
+  type IqOptionDemoAnalysisRecordRequest,
+  type IqOptionDemoAnalysisRecordResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-analysis-history.schema";
+
+import {
   iqOptionDemoAnalysisResponseSchema,
   type IqOptionDemoAnalysisRequest,
   type IqOptionDemoAnalysisResponse,
@@ -59,6 +68,15 @@ export interface QuantEngineIqOptionDemoAnalysisClient {
   ): Promise<IqOptionDemoAnalysisResponse>;
 }
 
+export interface QuantEngineIqOptionDemoHistoryClient {
+  listIqOptionDemoAnalyses(
+    input: IqOptionDemoAnalysisHistoryRequest,
+  ): Promise<IqOptionDemoAnalysisHistoryResponse>;
+
+  getIqOptionDemoAnalysisRecord(
+    input: IqOptionDemoAnalysisRecordRequest,
+  ): Promise<IqOptionDemoAnalysisRecordResponse>;
+}
 export type PythonQuantEngineClientConfig = {
   pythonExecutable: string;
   workingDirectory: string;
@@ -103,7 +121,8 @@ export class PythonQuantEngineClient
     QuantEngineClient,
     QuantEngineMarketDataClient,
     QuantEngineIqOptionSignalClient,
-    QuantEngineIqOptionDemoAnalysisClient
+    QuantEngineIqOptionDemoAnalysisClient,
+    QuantEngineIqOptionDemoHistoryClient
 {
   constructor(
     private readonly config: PythonQuantEngineClientConfig,
@@ -213,6 +232,49 @@ export class PythonQuantEngineClient
     return parsedPayload.data;
   }
 
+  async listIqOptionDemoAnalyses(
+    input: IqOptionDemoAnalysisHistoryRequest,
+  ): Promise<IqOptionDemoAnalysisHistoryResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_analysis_history",
+      "--limit",
+      String(input.limit),
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoAnalysisHistoryResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option demo history payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async getIqOptionDemoAnalysisRecord(
+    input: IqOptionDemoAnalysisRecordRequest,
+  ): Promise<IqOptionDemoAnalysisRecordResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_analysis_history",
+      "--record-id",
+      input.recordId,
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoAnalysisRecordResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option demo record payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
   private async runCli(arguments_: string[]): Promise<unknown> {
     let result: QuantEngineCommandResult;
 
@@ -276,3 +338,5 @@ export class PythonQuantEngineClient
     }
   }
 }
+
+

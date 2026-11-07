@@ -1,15 +1,17 @@
-import cors from "cors";
+﻿import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 
 import { env } from "./config/env";
 import { createIqOptionDemoAnalysisRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis.router";
+import { createIqOptionDemoAnalysisHistoryRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis-history.router";
 import { createIqOptionSignalRouter } from "./modules/iq-option-signals/iq-option-signal.router";
 import { createMarketAnalysisRouter } from "./modules/market-analysis/market-analysis.router";
 import {
   PythonQuantEngineClient,
   type QuantEngineClient,
   type QuantEngineIqOptionDemoAnalysisClient,
+  type QuantEngineIqOptionDemoHistoryClient,
   type QuantEngineIqOptionSignalClient,
   type QuantEngineMarketDataClient,
 } from "./modules/market-analysis/python-quant-engine.client";
@@ -18,6 +20,7 @@ import { createMarketDataRouter } from "./modules/market-data/market-data.router
 type AppDependencies = {
   quantEngineClient?: QuantEngineClient;
   quantEngineIqOptionDemoAnalysisClient?: QuantEngineIqOptionDemoAnalysisClient;
+  quantEngineIqOptionDemoHistoryClient?: QuantEngineIqOptionDemoHistoryClient;
   quantEngineIqOptionSignalClient?: QuantEngineIqOptionSignalClient;
   quantEngineMarketDataClient?: QuantEngineMarketDataClient;
 };
@@ -44,6 +47,9 @@ export function createApp(dependencies: AppDependencies = {}) {
   const quantEngineMarketDataClient =
     dependencies.quantEngineMarketDataClient ?? defaultQuantEngineClient;
 
+  const quantEngineIqOptionDemoHistoryClient =
+    dependencies.quantEngineIqOptionDemoHistoryClient ??
+    defaultQuantEngineClient;
   app.use(helmet());
   app.use(
     cors({
@@ -79,7 +85,16 @@ export function createApp(dependencies: AppDependencies = {}) {
     createIqOptionDemoAnalysisRouter(quantEngineIqOptionDemoAnalysisClient),
   );
 
+  app.use(
+    "/api/v1/iq-option/demo/analyses",
+    createIqOptionDemoAnalysisHistoryRouter(
+      quantEngineIqOptionDemoHistoryClient,
+    ),
+  );
   return app;
 }
 
 export const app = createApp();
+
+
+
