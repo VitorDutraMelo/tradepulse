@@ -8,13 +8,21 @@ version = "0.1.0"
 description = "Quantitative analysis engine for TradePulse."
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
-dependencies = []
+dependencies = [
+  "iqoptionapi @ git+https://github.com/iqoptionapi/iqoptionapi.git@8a903cc094a74af1ed935a56a2d6b5a9ed3319d7",
+]
 
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
   "ruff>=0.8",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+exclude = ["data*", "tests*"]
+namespaces = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
