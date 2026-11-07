@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import json
 import sys
 from collections.abc import Callable, Sequence
@@ -57,7 +57,7 @@ def analyze_iq_option_market(
     analysis_repository: IqOptionDemoAnalysisRepository | None = None,
     now: Callable[[], datetime] | None = None,
 ) -> dict[str, object]:
-    """Analyze and persist closed IQ Option DEMO candles with EMA 9/21."""
+    """Analyze and persist closed IQ Option DEMO candles with EMA 9/21 and RSI 14."""
 
     resolved_provider = provider or IqOptionMarketDataProvider()
     candles = tuple(
@@ -67,7 +67,7 @@ def analyze_iq_option_market(
             limit=limit,
         )
     )
-    strategy = EmaCrossoverStrategy()
+    strategy = EmaCrossoverStrategy(rsi_period=14)
     signal = strategy.analyze(
         symbol=symbol,
         timeframe=timeframe,
@@ -133,7 +133,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     parser = JsonArgumentParser(
         description=(
-            "Analyze IQ Option DEMO candles with TradePulse EMA 9/21."
+            "Analyze IQ Option DEMO candles with TradePulse EMA 9/21 and RSI 14."
         ),
     )
     requested_action = parser.add_mutually_exclusive_group(required=True)
