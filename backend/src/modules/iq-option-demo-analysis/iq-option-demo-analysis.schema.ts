@@ -19,6 +19,7 @@ export const iqOptionDemoAnalysisRequestSchema = z.object({
 });
 
 export const iqOptionDemoAnalysisResponseSchema = z.object({
+  recordId: z.string().min(1),
   symbol: z.string().min(1),
   timeframe: z.string().min(1),
   timestamp: z.string().min(1),

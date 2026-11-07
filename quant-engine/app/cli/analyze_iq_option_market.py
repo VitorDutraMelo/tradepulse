@@ -1,14 +1,20 @@
 import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from datetime import UTC, datetime
+from pathlib import Path
 
 from app.domain.signal import Signal
 from app.providers.iq_option_market_data_provider import (
     IqOptionMarketDataProvider,
 )
-from app.signals.market_analysis_service import MarketAnalysisService
+from app.repositories.iq_option_demo_analysis_repository import (
+    IqOptionDemoAnalysisRepository,
+)
 from app.strategies.ema_crossover_strategy import EmaCrossoverStrategy
+
+DEFAULT_ANALYSIS_DIRECTORY = Path("data/iq-option-demo-analyses")
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -48,20 +54,41 @@ def analyze_iq_option_market(
     timeframe: str,
     limit: int,
     provider: IqOptionMarketDataProvider | None = None,
+    analysis_repository: IqOptionDemoAnalysisRepository | None = None,
+    now: Callable[[], datetime] | None = None,
 ) -> dict[str, object]:
-    """Analyze closed IQ Option DEMO candles using the existing EMA strategy."""
+    """Analyze and persist closed IQ Option DEMO candles with EMA 9/21."""
 
-    service = MarketAnalysisService(
-        provider=provider or IqOptionMarketDataProvider(),
-        strategy=EmaCrossoverStrategy(),
+    resolved_provider = provider or IqOptionMarketDataProvider()
+    candles = tuple(
+        resolved_provider.get_candles(
+            symbol=symbol,
+            timeframe=timeframe,
+            limit=limit,
+        )
     )
-    signal = service.analyze(
+    strategy = EmaCrossoverStrategy()
+    signal = strategy.analyze(
         symbol=symbol,
         timeframe=timeframe,
-        limit=limit,
+        candles=candles,
+    )
+    payload = signal_to_payload(signal)
+
+    resolved_repository = analysis_repository or IqOptionDemoAnalysisRepository(
+        DEFAULT_ANALYSIS_DIRECTORY
+    )
+    recorded_at = (now or (lambda: datetime.now(tz=UTC)))()
+    record_path = resolved_repository.save(
+        signal=signal,
+        candles=candles,
+        recorded_at=recorded_at,
     )
 
-    return signal_to_payload(signal)
+    return {
+        **payload,
+        "recordId": record_path.stem,
+    }
 
 
 def list_iq_option_symbols(

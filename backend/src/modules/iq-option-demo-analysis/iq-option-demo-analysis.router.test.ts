@@ -9,9 +9,10 @@ import {
 import type { IqOptionDemoAnalysisResponse } from "./iq-option-demo-analysis.schema";
 
 const validIqOptionDemoAnalysisPayload: IqOptionDemoAnalysisResponse = {
+  recordId: "iq-demo-20261107-093608-218988-eurusd-otc-ffdccba1f5",
   symbol: "EURUSD-OTC",
   timeframe: "1m",
-  timestamp: "2026-11-07T01:10:00+00:00",
+  timestamp: "2026-11-07T09:35:00+00:00",
   direction: "NEUTRAL",
   score: 20,
   reasons: ["No EMA 9/21 crossover detected"],
