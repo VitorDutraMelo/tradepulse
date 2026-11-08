@@ -9,6 +9,7 @@ import {
   Copy,
   LoaderCircle,
   Pause,
+  Power,
   RefreshCw,
   ShieldAlert,
 } from "lucide-react";
@@ -111,7 +112,9 @@ function formatClock(now: number): string {
 interface SignalPanelProps {
   index: number;
   symbol: Asset;
+  enabled: boolean;
   onSymbolChange: (symbol: Asset) => void;
+  onEnabledChange: (enabled: boolean) => void;
   onConnectionChange: (
     index: number,
     connected: boolean
@@ -121,27 +124,37 @@ interface SignalPanelProps {
 function SignalPanel({
   index,
   symbol,
+  enabled,
   onSymbolChange,
+  onEnabledChange,
   onConnectionChange,
 }: SignalPanelProps) {
   const [result, setResult] = useState<Result | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [now, setNow] = useState(Date.now());
+
   const [updatedAt, setUpdatedAt] =
     useState<number | null>(null);
+
   const [showDetails, setShowDetails] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const controllerRef =
     useRef<AbortController | null>(null);
+
   const generationRef = useRef(0);
   const mountedRef = useRef(false);
   const symbolRef = useRef(symbol);
+  const enabledRef = useRef(enabled);
 
   const load = useCallback(
     async (asset: Asset, generation: number) => {
-      // Impede duas consultas simultâneas neste painel.
+      // Não consulta painéis desativados.
+      if (!enabledRef.current) return;
+
+      // Não permite requisições simultâneas
+      // dentro do mesmo painel.
       if (controllerRef.current) return;
 
       const controller = new AbortController();
@@ -156,10 +169,10 @@ function SignalPanel({
           controller.signal
         );
 
-        // Uma resposta antiga nunca substitui
-        // o resultado do ativo selecionado.
+        // Ignora resultados obsoletos.
         if (
           !mountedRef.current ||
+          !enabledRef.current ||
           controller.signal.aborted ||
           generation !== generationRef.current ||
           symbolRef.current !== asset
@@ -180,9 +193,10 @@ function SignalPanel({
       } catch (cause) {
         if (
           !mountedRef.current ||
+          !enabledRef.current ||
+          controller.signal.aborted ||
           generation !== generationRef.current ||
-          symbolRef.current !== asset ||
-          controller.signal.aborted
+          symbolRef.current !== asset
         ) {
           return;
         }
@@ -228,6 +242,7 @@ function SignalPanel({
     const generation = generationRef.current;
 
     symbolRef.current = symbol;
+    enabledRef.current = enabled;
 
     controllerRef.current?.abort();
     controllerRef.current = null;
@@ -238,6 +253,12 @@ function SignalPanel({
     setUpdatedAt(null);
     setCopied(false);
     onConnectionChange(index, false);
+
+    // Painel desligado: nenhuma requisição
+    // nem atualização automática.
+    if (!enabled) {
+      return;
+    }
 
     void load(symbol, generation);
 
@@ -251,18 +272,26 @@ function SignalPanel({
       controllerRef.current?.abort();
       controllerRef.current = null;
     };
-  }, [symbol, index, load, onConnectionChange]);
+  }, [
+    symbol,
+    enabled,
+    index,
+    load,
+    onConnectionChange,
+  ]);
 
   useEffect(() => {
+    if (!enabled) return;
+
     const interval = window.setInterval(() => {
       setNow(Date.now());
     }, 1000);
 
     return () => window.clearInterval(interval);
-  }, []);
+  }, [enabled]);
 
   const analysis =
-    result?.analysis.symbol === symbol
+    enabled && result?.analysis.symbol === symbol
       ? result.analysis
       : null;
 
@@ -271,10 +300,11 @@ function SignalPanel({
     : { stale: true, reason: "Sem análise atual" };
 
   const valid = Boolean(
-    analysis && !freshness.stale && !error
+    enabled && analysis && !freshness.stale && !error
   );
 
-  const action = valid ? analysis!.action : null;
+  const action =
+    valid && analysis ? analysis.action : null;
 
   const signalClass = action
     ? action.toLowerCase()
@@ -310,19 +340,21 @@ function SignalPanel({
       ? "Até o vencimento"
       : "Sem contagem ativa";
 
-  const statusText = error
-    ? "Erro na análise"
-    : loading && !analysis
-      ? "Consultando análise"
-      : !analysis
-        ? "Aguardando dados"
-        : freshness.stale
-          ? freshness.reason
-          : action === "CALL"
-            ? "Cenário de alta identificado"
-            : action === "PUT"
-              ? "Cenário de baixa identificado"
-              : "Aguardar confirmação";
+  const statusText = !enabled
+    ? "Análise pausada"
+    : error
+      ? "Erro na análise"
+      : loading && !analysis
+        ? "Consultando análise"
+        : !analysis
+          ? "Aguardando dados"
+          : freshness.stale
+            ? freshness.reason
+            : action === "CALL"
+              ? "Cenário de alta identificado"
+              : action === "PUT"
+                ? "Cenário de baixa identificado"
+                : "Aguardar confirmação";
 
   function changeAsset(value: string) {
     if (!isAsset(value) || value === symbolRef.current) {
@@ -332,18 +364,42 @@ function SignalPanel({
     generationRef.current += 1;
     controllerRef.current?.abort();
     controllerRef.current = null;
+
     symbolRef.current = value;
 
     setResult(null);
     setError("");
     setUpdatedAt(null);
-    setLoading(true);
+    setLoading(enabled);
     onConnectionChange(index, false);
 
     onSymbolChange(value);
   }
 
+  function toggleEnabled() {
+    const nextEnabled = !enabled;
+
+    // Interrompe imediatamente o painel
+    // ao desligar, sem esperar pelo React.
+    if (!nextEnabled) {
+      enabledRef.current = false;
+      generationRef.current += 1;
+      controllerRef.current?.abort();
+      controllerRef.current = null;
+
+      setResult(null);
+      setError("");
+      setLoading(false);
+      setUpdatedAt(null);
+      setShowDetails(false);
+      onConnectionChange(index, false);
+    }
+
+    onEnabledChange(nextEnabled);
+  }
+
   function refresh() {
+    if (!enabledRef.current) return;
     if (controllerRef.current) return;
 
     void load(
@@ -353,7 +409,7 @@ function SignalPanel({
   }
 
   async function copyJson() {
-    if (!result) return;
+    if (!enabled || !result) return;
 
     try {
       await navigator.clipboard.writeText(
@@ -370,6 +426,14 @@ function SignalPanel({
     <article
       className="terminal-panel"
       aria-label={`Painel ${index + 1}: ${symbol}`}
+      style={
+        enabled
+          ? undefined
+          : {
+              opacity: 0.78,
+              borderColor: "#46505c",
+            }
+      }
     >
       <div className="panel-header">
         <div className="panel-asset">
@@ -407,41 +471,86 @@ function SignalPanel({
         </div>
 
         <div className="panel-tools">
-          <div className="timer-box">
-            <Clock3 size={18} />
-
-            <div>
-              <span>{countdownLabel}</span>
-              <strong>
-                {countdownTarget !== null
-                  ? formatCountdown(
-                      countdownTarget - now
-                    )
-                  : "—"}
-              </strong>
-            </div>
-          </div>
-
           <button
             type="button"
-            className="icon-button"
-            title="Atualizar análise"
-            aria-label={`Atualizar ${symbol}`}
-            disabled={loading}
-            onClick={refresh}
+            onClick={toggleEnabled}
+            aria-pressed={enabled}
+            title={
+              enabled
+                ? "Desativar este painel"
+                : "Ativar este painel"
+            }
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "9px 11px",
+              borderRadius: 8,
+              border: `1px solid ${
+                enabled ? "#16885a" : "#667080"
+              }`,
+              background: enabled
+                ? "#0a3528"
+                : "#252c37",
+              color: enabled
+                ? "#27eb91"
+                : "#c6ced8",
+              fontWeight: 700,
+              fontSize: 11,
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
           >
-            <RefreshCw
-              size={19}
-              className={loading ? "spin" : ""}
-            />
+            <Power size={15} />
+            {enabled ? "ON" : "NONE"}
           </button>
+
+          {enabled && (
+            <>
+              <div className="timer-box">
+                <Clock3 size={18} />
+
+                <div>
+                  <span>{countdownLabel}</span>
+                  <strong>
+                    {countdownTarget !== null
+                      ? formatCountdown(
+                          countdownTarget - now
+                        )
+                      : "—"}
+                  </strong>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="icon-button"
+                title="Atualizar análise"
+                aria-label={`Atualizar ${symbol}`}
+                disabled={loading}
+                onClick={refresh}
+              >
+                <RefreshCw
+                  size={19}
+                  className={loading ? "spin" : ""}
+                />
+              </button>
+            </>
+          )}
         </div>
       </div>
 
       <div className="panel-content">
-        <p className="signal-caption">{statusText}</p>
+        <p className="signal-caption">
+          {statusText}
+        </p>
 
-        {loading && !analysis ? (
+        {!enabled ? (
+          <div className="signal-box neutral">
+            <Power size={38} />
+            <span>NONE</span>
+          </div>
+        ) : loading && !analysis ? (
           <div className="signal-box neutral">
             <LoaderCircle
               className="spin"
@@ -474,50 +583,70 @@ function SignalPanel({
           </div>
         )}
 
-        {error && (
+        {enabled && error && (
           <p className="panel-error" role="alert">
             {error}
           </p>
         )}
 
-        <div className="panel-times">
-          <span>
-            Análise: {timeUTC(analysis?.analysisAt)}
-          </span>
-          <span>
-            Entrada: {timeUTC(reference?.entryTime)}
-          </span>
-          <span>
-            Vencimento:{" "}
-            {timeUTC(reference?.expirationTime)}
-          </span>
-        </div>
+        {enabled ? (
+          <div className="panel-times">
+            <span>
+              Análise: {timeUTC(analysis?.analysisAt)}
+            </span>
+            <span>
+              Entrada: {timeUTC(reference?.entryTime)}
+            </span>
+            <span>
+              Vencimento:{" "}
+              {timeUTC(reference?.expirationTime)}
+            </span>
+          </div>
+        ) : (
+          <p
+            style={{
+              color: "#94a3b8",
+              fontSize: 12,
+              textAlign: "center",
+              margin: 0,
+            }}
+          >
+            Nenhuma requisição será enviada
+            enquanto este painel estiver desativado.
+          </p>
+        )}
       </div>
 
       <div className="panel-footer">
         <span>
-          {loading
-            ? "Atualizando..."
-            : updatedAt !== null
-              ? `Consultado: ${timeUTC(
-                  new Date(updatedAt).toISOString()
-                )}`
-              : "Aguardando resposta"}
+          {!enabled
+            ? "Painel desativado"
+            : loading
+              ? "Atualizando..."
+              : updatedAt !== null
+                ? `Consultado: ${timeUTC(
+                    new Date(updatedAt).toISOString()
+                  )}`
+                : "Aguardando resposta"}
         </span>
 
-        <button
-          type="button"
-          className="details-button"
-          onClick={() =>
-            setShowDetails((current) => !current)
-          }
-        >
-          <Code2 size={15} />
-          {showDetails ? "Ocultar detalhes" : "Detalhes"}
-        </button>
+        {enabled && (
+          <button
+            type="button"
+            className="details-button"
+            onClick={() =>
+              setShowDetails((current) => !current)
+            }
+          >
+            <Code2 size={15} />
+            {showDetails
+              ? "Ocultar detalhes"
+              : "Detalhes"}
+          </button>
+        )}
       </div>
 
-      {showDetails && (
+      {enabled && showDetails && (
         <div className="panel-details">
           <div className="detail-grid">
             <div>
@@ -533,15 +662,6 @@ function SignalPanel({
                 {formatNumber(indicators?.ema21)}
               </strong>
             </div>
-
-            {indicators?.ma50 != null && (
-              <div>
-                <span>MA 50</span>
-                <strong>
-                  {formatNumber(indicators.ma50)}
-                </strong>
-              </div>
-            )}
 
             <div>
               <span>RSI 14</span>
@@ -616,6 +736,11 @@ export default function App() {
     [...INITIAL_ASSETS]
   );
 
+  // Somente o primeiro painel inicia ativo.
+  const [enabledPanels, setEnabledPanels] = useState<
+    boolean[]
+  >([true, false, false, false]);
+
   const [now, setNow] = useState(Date.now());
 
   const [connections, setConnections] = useState<
@@ -653,8 +778,24 @@ export default function App() {
     );
   }
 
-  const connectedCount = connections.filter(
+  function updateEnabled(
+    index: number,
+    enabled: boolean
+  ) {
+    setEnabledPanels((current) =>
+      current.map((value, position) =>
+        position === index ? enabled : value
+      )
+    );
+  }
+
+  const activeCount = enabledPanels.filter(
     Boolean
+  ).length;
+
+  const connectedCount = connections.filter(
+    (connected, index) =>
+      connected && enabledPanels[index]
   ).length;
 
   return (
@@ -680,7 +821,9 @@ export default function App() {
               <div>
                 <strong>{displayAsset(asset)}</strong>
                 <small>
-                  M1 · Painel {index + 1}
+                  {enabledPanels[index]
+                    ? `M1 · Painel ${index + 1} · ON`
+                    : `Painel ${index + 1} · NONE`}
                 </small>
               </div>
             </div>
@@ -721,8 +864,12 @@ export default function App() {
                 key={index}
                 index={index}
                 symbol={asset}
+                enabled={enabledPanels[index]}
                 onSymbolChange={(next) =>
                   updateAsset(index, next)
+                }
+                onEnabledChange={(next) =>
+                  updateEnabled(index, next)
                 }
                 onConnectionChange={updateConnection}
               />
@@ -737,13 +884,15 @@ export default function App() {
 
             <span className="footer-refresh">
               <RefreshCw size={17} />
-              Atualização automática: 60s por painel
+              {activeCount === 0
+                ? "Todas as análises pausadas"
+                : `${activeCount} painel(is) ativo(s) · Atualização: 60s`}
             </span>
 
             <span className="footer-connection">
               <Activity size={17} />
-              {connectedCount}/4 painéis com resposta
-              válida da API
+              {connectedCount}/{activeCount} painéis
+              com resposta válida da API
             </span>
           </footer>
         </main>
