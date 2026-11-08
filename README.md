@@ -1,6 +1,6 @@
 <div align="center">
 
-![TradePulse candlestick banner](docs/images/tradepulse-candles.svg)
+![TradePulse candlestick banner](tradepulse-candles.svg)
 
 # TradePulse
 
