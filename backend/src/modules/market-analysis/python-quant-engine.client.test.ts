@@ -36,6 +36,34 @@ const validCandlesPayload = {
   ],
 };
 
+const validIqOptionDemoAnalysisPayload = {
+  symbol: "EURUSD-OTC",
+  timeframe: "1m",
+  source: "iq_option_demo",
+  accountMode: "PRACTICE",
+  analysisAt: "2026-11-08T12:07:04.914171+00:00",
+  lastClosedCandle: {
+    openTime: "2026-11-08T12:06:00+00:00",
+    closeTime: "2026-11-08T12:07:00+00:00",
+    ageSeconds: 4.914171,
+  },
+  indicators: {
+    ema9: 1.1059452456282621,
+    ema21: 1.1063734732262245,
+    rsi14: 41.67946301547834,
+    adx14: 25.200070442490915,
+    atr14: 0.000613654856663767,
+  },
+  action: "PUT",
+  reference: {
+    price: 1.105895,
+    entryTime: "2026-11-08T12:08:00+00:00",
+    expirationTime: "2026-11-08T12:09:00+00:00",
+  },
+  reasons: ["EMA 9 is below EMA 21."],
+  disclaimer: "Technical reference only. No IQ Option order was sent.",
+};
+
 describe("PythonQuantEngineClient", () => {
   it("runs the analysis CLI with fixed command arguments", async () => {
     const runner: QuantEngineRunner = {
@@ -44,6 +72,7 @@ describe("PythonQuantEngineClient", () => {
         stderr: "",
       }),
     };
+
     const client = new PythonQuantEngineClient(
       {
         pythonExecutable: "python.exe",
@@ -60,6 +89,7 @@ describe("PythonQuantEngineClient", () => {
     });
 
     expect(result).toEqual(validAnalysisPayload);
+
     expect(runner.run).toHaveBeenCalledWith(
       "python.exe",
       [
@@ -86,6 +116,7 @@ describe("PythonQuantEngineClient", () => {
         stderr: "",
       }),
     };
+
     const client = new PythonQuantEngineClient(
       {
         pythonExecutable: "python.exe",
@@ -102,6 +133,7 @@ describe("PythonQuantEngineClient", () => {
     });
 
     expect(result).toEqual(validCandlesPayload);
+
     expect(runner.run).toHaveBeenCalledWith(
       "python.exe",
       [
@@ -121,6 +153,50 @@ describe("PythonQuantEngineClient", () => {
     );
   });
 
+  it("runs the read-only IQ Option binary analysis CLI", async () => {
+    const runner: QuantEngineRunner = {
+      run: vi.fn().mockResolvedValue({
+        stdout: JSON.stringify(validIqOptionDemoAnalysisPayload),
+        stderr: "",
+      }),
+    };
+
+    const client = new PythonQuantEngineClient(
+      {
+        pythonExecutable: "python.exe",
+        workingDirectory: "C:/tradepulse/quant-engine",
+        timeoutMs: 15000,
+      },
+      runner,
+    );
+
+    const result = await client.analyzeIqOptionDemo({
+      symbol: "EURUSD-OTC",
+      timeframe: "1m",
+      limit: 100,
+    });
+
+    expect(result).toEqual(validIqOptionDemoAnalysisPayload);
+
+    expect(runner.run).toHaveBeenCalledWith(
+      "python.exe",
+      [
+        "-m",
+        "app.cli.analyze_iq_option_binary_signal",
+        "--symbol",
+        "EURUSD-OTC",
+        "--timeframe",
+        "1m",
+        "--limit",
+        "100",
+      ],
+      {
+        cwd: "C:/tradepulse/quant-engine",
+        timeoutMs: 15000,
+      },
+    );
+  });
+
   it("rejects invalid JSON returned by the CLI", async () => {
     const runner: QuantEngineRunner = {
       run: vi.fn().mockResolvedValue({
@@ -128,6 +204,7 @@ describe("PythonQuantEngineClient", () => {
         stderr: "",
       }),
     };
+
     const client = new PythonQuantEngineClient(
       {
         pythonExecutable: "python.exe",
@@ -159,6 +236,7 @@ describe("PythonQuantEngineClient", () => {
         }),
       ),
     };
+
     const client = new PythonQuantEngineClient(
       {
         pythonExecutable: "python.exe",

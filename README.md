@@ -1,133 +1,238 @@
+<div align="center">
+
+![TradePulse candlestick banner](docs/images/tradepulse-candles.svg)
+
 # TradePulse
 
-**A modular market-analysis platform for technical signals, strategy research, and backtesting.**
+**IQ Option PRACTICE market analysis · Explainable CALL / PUT / WAIT signals**
 
-TradePulse is an in-development full-stack project designed to turn market data into explainable technical analysis. Its first product focus is **signal research for markets available on IQ Option**, with an architecture that can support additional data providers and markets over time.
+![Status](https://img.shields.io/badge/status-active%20development-0f766e?style=for-the-badge) ![Mode](https://img.shields.io/badge/account-PRACTICE-16a34a?style=for-the-badge) ![Orders](https://img.shields.io/badge/orders-NONE-334155?style=for-the-badge)
 
-> **Project status:** Early development. The frontend prototype exists; the Python quantitative engine is being set up. Market-data integrations, validated signals, backtesting, and live trading features are **not yet implemented or verified**.
+![React](https://img.shields.io/badge/React-149ECA?logo=react&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white) ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white) ![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
 
-## Vision
+</div>
 
-TradePulse aims to help users explore trading setups through transparent, testable analysis rather than opaque “guaranteed win” predictions.
+## Overview
 
-The platform is being designed to:
+TradePulse is a local, read-only dashboard that retrieves candlestick data through an **unofficial IQ Option integration in PRACTICE mode** and turns it into explainable technical analysis. The frontend displays the selected OTC pair, the latest analysis, indicator values, reference times, and the original JSON response.
 
-- Analyze normalized OHLCV candlestick data.
-- Calculate technical indicators and recognize candlestick patterns.
-- Evaluate configurable strategies and generate **LONG**, **SHORT**, or **NEUTRAL** signals.
-- Explain which conditions contributed to each signal.
-- Run historical backtests and report strategy performance.
-- Support paper trading and, eventually, alerts and live monitoring.
-- Keep market-data providers separate from the analysis engine.
+**Current scope:** technical research only. No orders are submitted, no real account is used, and no profits or signal accuracy are guaranteed.
 
-**Important:** A technical signal score measures agreement with a strategy's rules; it is **not** a probability of profit. Any reported performance must be supported by appropriately designed tests.
+## Dashboard features
+
+| Feature | Current behavior |
+|---|---|
+| Signal | **🟢 CALL**, **🔴 PUT**, or **⚪ WAIT** |
+| Market | Select one of eight OTC symbols |
+| Timeframe | `1m` |
+| Candle request | `limit=120` |
+| Refresh | Every 60 seconds or manually |
+| Indicators | EMA 9, EMA 21, RSI 14, ADX 14, ATR 14 |
+| Explanation | Reasons returned by the backend |
+| Reference | Analysis, entry and expiration timestamps |
+| API inspection | View the JSON response |
+| Error handling | Show errors without inventing a signal |
+
+> The eight symbols are **frontend choices**, not a live list of open markets. A selectable asset is not necessarily available from the provider at that moment.
+
+### OTC symbols
+
+`EURUSD-OTC` · `GBPUSD-OTC` · `USDJPY-OTC` · `EURJPY-OTC` · `EURGBP-OTC` · `AUDUSD-OTC` · `USDCAD-OTC` · `AUDCAD-OTC`
+
+**Verified with returned PRACTICE candles:** `EURUSD-OTC` and `GBPUSD-OTC`. Other pairs require individual validation.
+
+## Signal logic
+
+| Signal | Conditions |
+|---|---|
+| **CALL** | EMA 9 above EMA 21, RSI within configured bullish range, ADX above configured minimum |
+| **PUT** | EMA 9 below EMA 21, RSI within configured bearish range, ADX above configured minimum |
+| **WAIT** | Required conditions are not aligned |
+
+ATR 14 is returned as a volatility indicator; this does **not** establish that ATR currently filters signals. The exact thresholds live in the Python engine, not in this README.
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    UI["Frontend — React + TypeScript"] --> API["Backend API — Node.js + TypeScript"]
-    API --> QE["Quant Engine — Python"]
-    QE --> MD["Market Data Provider Adapters"]
-    API --> DB[("PostgreSQL — planned")]
-    QE --> BT["Backtesting & Paper Trading — planned"]
+flowchart LR
+    UI["React + TypeScript\nVite :5173"] -->|HTTP / JSON| API["Express + TypeScript\n:3001"]
+    API --> QE["Python Quant Engine"]
+    QE --> IQ["Unofficial IQ Option API\nPRACTICE candles"]
+    IQ --> QE
+    QE -->|Indicators + CALL / PUT / WAIT| API
+    API -->|Analysis JSON| UI
 ```
-
-| Component | Planned stack | Responsibility |
-| --- | --- | --- |
-| `frontend/` | React, TypeScript | Dashboard, charts, signals, and strategy views |
-| `backend/` | Node.js, TypeScript, Express | Product API, users, persistence, history, and alerts |
-| `quant-engine/` | Python, pandas, NumPy, pytest | Data normalization, indicators, patterns, strategies, signals, and backtesting |
-| Database | PostgreSQL, Prisma | Application and research data persistence |
-| `docs/` | Markdown | Architecture and strategy documentation |
-
-The services will communicate through explicit, versioned data contracts. The Node.js API will serve the frontend; the Python engine will handle quantitative calculations.
-
-## Planned analysis pipeline
-
-```text
-Market data
-    ↓
-OHLCV normalization
-    ↓
-Market context + technical indicators
-    ↓
-Candlestick pattern detection
-    ↓
-Configurable strategy rules
-    ↓
-Signal: LONG / SHORT / NEUTRAL
-    ↓
-Risk / outcome model
-    ↓
-Backtesting, metrics, and paper trading
-    ↓
-API and dashboard
-```
-
-For binary or digital options, the presentation layer may map **LONG → CALL** and **SHORT → PUT**. Outcome evaluation must account for the relevant expiry and payout model; it must not be confused with stop-loss/take-profit trading.
-
-## Development roadmap
-
-- [x] Define the initial product vision and modular architecture.
-- [x] Build an initial frontend prototype using demonstration data.
-- [x] Organize the repository into frontend, backend, and quantitative-engine areas.
-- [ ] Finalize Python environment and project tooling.
-- [ ] Implement normalized candle models and a mock market-data provider.
-- [ ] Implement and test technical indicators and candlestick patterns.
-- [ ] Implement configurable strategy rules and explainable signals.
-- [ ] Build reproducible historical backtests and performance metrics.
-- [ ] Validate out-of-sample results and introduce paper trading.
-- [ ] Build and connect the Node.js API to the frontend.
-- [ ] Evaluate an authorized IQ Option market-data integration.
-- [ ] Add live monitoring, alerts, and other providers as appropriate.
-
-Roadmap items are goals, not claims of completed functionality.
-
-## Repository structure
 
 ```text
 tradepulse/
-├── backend/             # Node.js API (planned)
-├── frontend/            # UI prototype
-├── quant-engine/        # Python quantitative analysis
-│   ├── app/
-│   └── tests/
-├── docs/                # Architecture and strategy notes
-├── .gitignore
+├── backend/                 # Express API
+├── frontend/                # React / Vite dashboard
+│   ├── src/App.tsx
+│   ├── src/api.ts
+│   └── src/style.css
+├── quant-engine/            # Python indicators and signal rules
+├── docs/
+│   └── images/
+│       └── tradepulse-candles.svg
 └── README.md
 ```
 
-> The structure above reflects the intended layout; individual modules may evolve as implementation progresses.
+## REST API
 
-## Engineering principles
+**Backend:** `http://localhost:3001`
 
-- **Evidence before claims:** assess strategies with backtests, out-of-sample evaluation, and paper trading.
-- **No look-ahead bias:** decisions must use only data available at the time.
-- **Explainable signals:** preserve the rules and evidence behind each result.
-- **Provider independence:** avoid hard-coding the analysis engine to a broker.
-- **Testable components:** isolate indicators, strategies, and outcome calculations.
-- **Incremental delivery:** ship small, verified improvements before expanding scope.
-- **Secure by default:** keep credentials out of source control and use environment variables.
+```http
+GET /api/v1/health
+GET /api/v1/iq-option/demo/market-analysis?symbol=GBPUSD-OTC&timeframe=1m&limit=120
+```
 
-## Getting started
+Example PowerShell request:
 
-The project is still in its foundation stage, so a complete installation and run guide is not available yet. Setup instructions will be added once the development environment and initial services are verified.
+```powershell
+Invoke-RestMethod "http://localhost:3001/api/v1/iq-option/demo/market-analysis?symbol=GBPUSD-OTC&timeframe=1m&limit=120" | ConvertTo-Json -Depth 10
+```
 
-## IQ Option integration and scope
+### Analysis response contract
 
-IQ Option is the **initial platform focus**, not a dependency of the core strategy engine. Any integration will be evaluated for technical reliability, authorization, terms of service, and applicable legal requirements.
+```json
+{
+  "symbol": "GBPUSD-OTC",
+  "timeframe": "1m",
+  "source": "iq_option_demo",
+  "accountMode": "PRACTICE",
+  "analysisAt": "2026-11-08T14:00:00Z",
+  "lastClosedCandle": {
+    "openTime": "2026-11-08T13:59:00Z",
+    "closeTime": "2026-11-08T14:00:00Z",
+    "ageSeconds": 0
+  },
+  "indicators": {
+    "ema9": 1.25,
+    "ema21": 1.251,
+    "rsi14": 42,
+    "adx14": 26,
+    "atr14": 0.0006
+  },
+  "action": "PUT",
+  "reference": {
+    "price": 1.2498,
+    "entryTime": "2026-11-08T14:01:00Z",
+    "expirationTime": "2026-11-08T14:02:00Z"
+  },
+  "reasons": ["Example bearish EMA, RSI and ADX conditions."],
+  "disclaimer": "Technical reference only. No IQ Option order was sent."
+}
+```
 
-**TradePulse does not currently place real-money trades.** Automated order execution is not part of the initial implementation and is not promised as a future feature.
+*Illustrative payload: prices and timestamps above are not a verified live signal. A reference price is not a confirmed entry execution price.*
 
-## Risk disclaimer
+## Local setup (Windows / PowerShell)
 
-TradePulse is a software engineering and market-research project, **not financial advice**. Technical analysis and backtesting cannot guarantee future performance. Trading involves risk, and binary options may be restricted or prohibited for retail customers in certain jurisdictions, including the United Kingdom.
+### Requirements
 
-## Project status
+- Git
+- Node.js and npm
+- Python with `venv` and `pip`
+- Access to the required IQ Option PRACTICE data integration, subject to its terms and local restrictions
 
-**Under active development.** This repository documents the implementation process, architectural decisions, testing practices, and future capabilities as they are built.
+### 1. Clone and install
+
+```powershell
+git clone https://github.com/VitorDutraMelo/tradepulse.git
+cd tradepulse
+
+cd backend
+npm install
+cd ..\frontend
+npm install
+cd ..\quant-engine
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e .
+cd ..
+```
+
+If PowerShell blocks venv activation, use a process-scoped policy change only if permitted by your machine's security policy:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+```
+
+**Python note:** confirm additional dependencies and exact Python version requirements against `quant-engine` project files. The editable installation above is the expected starting point, not a guarantee that all external integration dependencies are available.
+
+### 2. Configure environment safely
+
+Copy `frontend/.env.example` to `frontend/.env.local` if needed, and use the existing API base URL setting from that example. The frontend must use `http://localhost:3001`.
+
+**IQ Option PRACTICE credentials must be provided only through the backend/quant-engine's existing terminal environment-variable flow.** Consult the implementation for the exact variable names. Never paste credentials into frontend code, Git, README, screenshots, or logs. Do not commit any `.env.local` file.
+
+### 3. Start the backend
+
+In a new PowerShell terminal:
+
+```powershell
+cd tradepulse\backend
+npm run dev
+```
+
+### 4. Start the frontend
+
+In another terminal:
+
+```powershell
+cd tradepulse\frontend
+npm run dev
+```
+
+Open **http://localhost:5173** (not `127.0.0.1:5173`, due to the configured CORS origin).
+
+### 5. Verify
+
+```powershell
+Invoke-RestMethod "http://localhost:3001/api/v1/health"
+```
+
+Select an OTC asset in the dashboard and request analysis. If the provider cannot return valid data, the UI should show an error rather than a fabricated signal.
+
+## Tests
+
+```powershell
+cd backend
+npm test
+npm run build
+
+cd ..\frontend
+npm run build
+```
+
+**Last reported local verification (8 Nov 2026):** backend **27/27 tests passed** and frontend Vite build succeeded. This is a local checkpoint, not a CI badge or a claim of validated trading performance.
+
+## Roadmap
+
+- [x] React + TypeScript dashboard
+- [x] Express API and Python analysis integration
+- [x] PRACTICE candle-data retrieval for tested OTC pairs
+- [x] EMA 9/21, RSI 14, ADX 14, ATR 14
+- [x] Explainable CALL / PUT / WAIT API responses
+- [x] Local dashboard with asset selection and refresh
+- [ ] Validate all selectable symbols and provider reliability
+- [ ] Reliable entry/expiry outcome recording and historical evaluation
+- [ ] Reproducible backtests and out-of-sample validation
+- [ ] Documented, reproducible setup on another developer's computer
+
+## Security and risk
+
+- **Read-only:** no trading-order execution.
+- **PRACTICE only:** no real-money account integration.
+- **Secrets:** credentials belong in local environment variables, never in Git.
+- **Unofficial integration:** availability, reliability and authorization must be independently evaluated.
+- **Financial risk:** technical indicators do not guarantee profit. Binary options may be restricted or prohibited for retail users in some jurisdictions, including the UK.
 
 ---
 
-*Built to explore the intersection of backend engineering, quantitative analysis, and full-stack product development.*
+<div align="center">
+
+**TradePulse — Build signals you can inspect, not promises you cannot verify.**
+
+</div>

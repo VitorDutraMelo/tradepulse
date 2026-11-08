@@ -31,9 +31,7 @@ export function createIqOptionDemoAnalysisRouter(
         parsedRequest.data,
       );
 
-      response.status(200).json({
-        data: analysis,
-      });
+      response.status(200).json(analysis);
     } catch (error) {
       if (error instanceof QuantEngineClientError) {
         response.status(502).json({

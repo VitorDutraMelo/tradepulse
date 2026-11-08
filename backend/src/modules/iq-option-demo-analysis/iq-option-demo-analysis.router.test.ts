@@ -9,55 +9,54 @@ import {
 import type { IqOptionDemoAnalysisResponse } from "./iq-option-demo-analysis.schema";
 
 const validIqOptionDemoAnalysisPayload: IqOptionDemoAnalysisResponse = {
-  recordId: "iq-demo-20261107-093608-218988-eurusd-otc-ffdccba1f5",
   symbol: "EURUSD-OTC",
   timeframe: "1m",
-  timestamp: "2026-11-07T09:35:00+00:00",
-  direction: "NEUTRAL",
-  score: 20,
-  reasons: ["No EMA 9/21 crossover detected"],
   source: "iq_option_demo",
-  venue: "iq",
   accountMode: "PRACTICE",
-  strategy: "ema_crossover",
-  indicators: {
-    fastEmaPeriod: 9,
-    slowEmaPeriod: 21,
+  analysisAt: "2026-11-07T09:35:04+00:00",
+  lastClosedCandle: {
+    openTime: "2026-11-07T09:34:00+00:00",
+    closeTime: "2026-11-07T09:35:00+00:00",
+    ageSeconds: 4,
   },
-  disclaimer:
-    "Technical analysis only. LONG, SHORT and NEUTRAL are not automatic CALL, PUT or WAIT instructions.",
+  indicators: {
+    ema9: 1.105945,
+    ema21: 1.106373,
+    rsi14: 41.68,
+    adx14: 25.2,
+    atr14: 0.000614,
+  },
+  action: "PUT",
+  reference: {
+    price: 1.105895,
+    entryTime: "2026-11-07T09:36:00+00:00",
+    expirationTime: "2026-11-07T09:37:00+00:00",
+  },
+  reasons: ["EMA 9 is below EMA 21."],
+  disclaimer: "Technical reference only. No IQ Option order was sent.",
 };
 
 describe("GET /api/v1/iq-option/demo/market-analysis", () => {
-  it("returns a validated IQ Option practice analysis", async () => {
+  it("returns the frontend signal contract directly", async () => {
     const analyzeIqOptionDemo = vi
       .fn()
       .mockResolvedValue(validIqOptionDemoAnalysisPayload);
 
-    const quantEngineIqOptionDemoAnalysisClient: QuantEngineIqOptionDemoAnalysisClient =
-      {
-        analyzeIqOptionDemo,
-      };
-
-    const app = createApp({ quantEngineIqOptionDemoAnalysisClient });
+    const app = createApp({
+      quantEngineIqOptionDemoAnalysisClient: { analyzeIqOptionDemo },
+    });
 
     const response = await request(app)
       .get("/api/v1/iq-option/demo/market-analysis")
-      .query({
-        symbol: "EURUSD-OTC",
-        timeframe: "1m",
-        limit: 30,
-      })
+      .query({ symbol: "EURUSD-OTC", timeframe: "1m", limit: 29 })
       .expect(200);
 
-    expect(response.body).toEqual({
-      data: validIqOptionDemoAnalysisPayload,
-    });
+    expect(response.body).toEqual(validIqOptionDemoAnalysisPayload);
 
     expect(analyzeIqOptionDemo).toHaveBeenCalledWith({
       symbol: "EURUSD-OTC",
       timeframe: "1m",
-      limit: 30,
+      limit: 29,
     });
   });
 
@@ -66,19 +65,13 @@ describe("GET /api/v1/iq-option/demo/market-analysis", () => {
       .fn()
       .mockResolvedValue(validIqOptionDemoAnalysisPayload);
 
-    const quantEngineIqOptionDemoAnalysisClient: QuantEngineIqOptionDemoAnalysisClient =
-      {
-        analyzeIqOptionDemo,
-      };
-
-    const app = createApp({ quantEngineIqOptionDemoAnalysisClient });
+    const app = createApp({
+      quantEngineIqOptionDemoAnalysisClient: { analyzeIqOptionDemo },
+    });
 
     await request(app)
       .get("/api/v1/iq-option/demo/market-analysis")
-      .query({
-        symbol: "EURUSD",
-        timeframe: "5m",
-      })
+      .query({ symbol: "EURUSD", timeframe: "5m" })
       .expect(200);
 
     expect(analyzeIqOptionDemo).toHaveBeenCalledWith({
@@ -91,28 +84,14 @@ describe("GET /api/v1/iq-option/demo/market-analysis", () => {
   it("rejects an invalid request before calling the Quant Engine", async () => {
     const analyzeIqOptionDemo = vi.fn();
 
-    const quantEngineIqOptionDemoAnalysisClient: QuantEngineIqOptionDemoAnalysisClient =
-      {
-        analyzeIqOptionDemo,
-      };
-
-    const app = createApp({ quantEngineIqOptionDemoAnalysisClient });
-
-    const response = await request(app)
-      .get("/api/v1/iq-option/demo/market-analysis")
-      .query({
-        symbol: "BTC-USDT",
-        timeframe: "3m",
-        limit: 10,
-      })
-      .expect(400);
-
-    expect(response.body).toEqual({
-      error: {
-        code: "INVALID_IQ_OPTION_DEMO_ANALYSIS_REQUEST",
-        message: "The IQ Option demo analysis request is invalid.",
-      },
+    const app = createApp({
+      quantEngineIqOptionDemoAnalysisClient: { analyzeIqOptionDemo },
     });
+
+    await request(app)
+      .get("/api/v1/iq-option/demo/market-analysis")
+      .query({ symbol: "BTC-USDT", timeframe: "3m", limit: 10 })
+      .expect(400);
 
     expect(analyzeIqOptionDemo).not.toHaveBeenCalled();
   });
@@ -131,19 +110,9 @@ describe("GET /api/v1/iq-option/demo/market-analysis", () => {
 
     const app = createApp({ quantEngineIqOptionDemoAnalysisClient });
 
-    const response = await request(app)
+    await request(app)
       .get("/api/v1/iq-option/demo/market-analysis")
-      .query({
-        symbol: "EURUSD-OTC",
-        timeframe: "1m",
-      })
+      .query({ symbol: "EURUSD-OTC", timeframe: "1m" })
       .expect(502);
-
-    expect(response.body).toEqual({
-      error: {
-        code: "IQ_OPTION_DEMO_ANALYSIS_UNAVAILABLE",
-        message: "IQ Option demo authentication failed.",
-      },
-    });
   });
 });

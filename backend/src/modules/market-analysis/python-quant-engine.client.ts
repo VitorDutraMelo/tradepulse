@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+﻿import { execFile } from "node:child_process";
 
 import {
   iqOptionDemoAnalysisHistoryResponseSchema,
@@ -8,7 +8,6 @@ import {
   type IqOptionDemoAnalysisRecordRequest,
   type IqOptionDemoAnalysisRecordResponse,
 } from "../iq-option-demo-analysis/iq-option-demo-analysis-history.schema";
-
 import {
   iqOptionDemoAnalysisResponseSchema,
   type IqOptionDemoAnalysisRequest,
@@ -77,6 +76,7 @@ export interface QuantEngineIqOptionDemoHistoryClient {
     input: IqOptionDemoAnalysisRecordRequest,
   ): Promise<IqOptionDemoAnalysisRecordResponse>;
 }
+
 export type PythonQuantEngineClientConfig = {
   pythonExecutable: string;
   workingDirectory: string;
@@ -211,7 +211,7 @@ export class PythonQuantEngineClient
   ): Promise<IqOptionDemoAnalysisResponse> {
     const rawPayload = await this.runCli([
       "-m",
-      "app.cli.analyze_iq_option_market",
+      "app.cli.analyze_iq_option_binary_signal",
       "--symbol",
       input.symbol,
       "--timeframe",
@@ -275,6 +275,7 @@ export class PythonQuantEngineClient
 
     return parsedPayload.data;
   }
+
   private async runCli(arguments_: string[]): Promise<unknown> {
     let result: QuantEngineCommandResult;
 

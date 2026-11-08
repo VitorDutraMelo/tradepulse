@@ -13,27 +13,36 @@ export const iqOptionDemoAnalysisRequestSchema = z.object({
   limit: z.coerce
     .number()
     .int()
-    .min(22, "limit must be at least 22 for EMA 9/21 analysis")
+    .min(29, "limit must be at least 29 for EMA, RSI, ADX and ATR analysis")
     .max(1000, "limit must not exceed 1000")
     .default(100),
 });
 
 export const iqOptionDemoAnalysisResponseSchema = z.object({
-  recordId: z.string().min(1),
   symbol: z.string().min(1),
   timeframe: z.string().min(1),
-  timestamp: z.string().min(1),
-  direction: z.enum(["LONG", "SHORT", "NEUTRAL"]),
-  score: z.number().int().min(0).max(100),
-  reasons: z.array(z.string().min(1)).min(1),
   source: z.literal("iq_option_demo"),
-  venue: z.literal("iq"),
   accountMode: z.literal("PRACTICE"),
-  strategy: z.literal("ema_crossover"),
-  indicators: z.object({
-    fastEmaPeriod: z.number().int().positive(),
-    slowEmaPeriod: z.number().int().positive(),
+  analysisAt: z.string().min(1),
+  lastClosedCandle: z.object({
+    openTime: z.string().min(1).nullable(),
+    closeTime: z.string().min(1).nullable(),
+    ageSeconds: z.number().finite().nullable(),
   }),
+  indicators: z.object({
+    ema9: z.number().finite().nullable(),
+    ema21: z.number().finite().nullable(),
+    rsi14: z.number().finite().nullable(),
+    adx14: z.number().finite().nullable(),
+    atr14: z.number().finite().nullable(),
+  }),
+  action: z.enum(["CALL", "PUT", "WAIT"]),
+  reference: z.object({
+    price: z.number().finite().nullable(),
+    entryTime: z.string().min(1).nullable(),
+    expirationTime: z.string().min(1).nullable(),
+  }),
+  reasons: z.array(z.string().min(1)).min(1),
   disclaimer: z.string().min(1),
 });
 
