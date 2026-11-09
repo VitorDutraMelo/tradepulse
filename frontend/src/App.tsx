@@ -1,27 +1,37 @@
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
 import {
   Activity,
   ArrowDownRight,
   ArrowUpRight,
+  Check,
+  Clipboard,
   Clock3,
   Code2,
-  Copy,
   LoaderCircle,
-  Pause,
-  Power,
   RefreshCw,
   ShieldAlert,
+  Timer,
+  Wifi,
+  WifiOff,
+  Pause,
+  TrendingUp,
+  ChartNoAxesColumnIncreasing,
 } from "lucide-react";
 
 import {
   getAnalysis,
   isStale,
+  number,
   timeUTC,
   type Result,
 } from "./api";
-
-import "./style.css";
 
 const ASSETS = [
   "EURUSD-OTC",
@@ -34,197 +44,146 @@ const ASSETS = [
   "AUDCAD-OTC",
 ] as const;
 
-type Asset = (typeof ASSETS)[number];
+const REFRESH_SECONDS = 60;
+const TIMEOUT_MS = 15000;
 
-const INITIAL_ASSETS: Asset[] = [
-  "EURUSD-OTC",
-  "GBPUSD-OTC",
-  "USDJPY-OTC",
-  "EURJPY-OTC",
-];
+const indicators = [
+  { key: "ema9", label: "EMA 9", color: "#1595f5", digits: 6 },
+  { key: "ema21", label: "EMA 21", color: "#9854ef", digits: 6 },
+  { key: "ma50", label: "MA 50", color: "#f78c38", digits: 6 },
+  { key: "rsi14", label: "RSI 14", color: "#f4d51b", digits: 2 },
+  { key: "adx14", label: "ADX 14", color: "#00d96a", digits: 2 },
+  { key: "atr14", label: "ATR 14", color: "#0edddd", digits: 6 },
+] as const;
 
-const REFRESH_MS = 60_000;
-
-function isAsset(value: string): value is Asset {
-  return ASSETS.some((asset) => asset === value);
-}
-
-function displayAsset(symbol: string): string {
-  const pair = symbol.replace("-OTC", "");
-  return `${pair.slice(0, 3)}/${pair.slice(3)} OTC`;
-}
-
-function assetFlags(symbol: string): string {
-  const pair = symbol.replace("-OTC", "");
-
-  const flags: Record<string, string> = {
-    EUR: "🇪🇺",
-    USD: "🇺🇸",
-    GBP: "🇬🇧",
-    JPY: "🇯🇵",
-    AUD: "🇦🇺",
-    CAD: "🇨🇦",
-  };
-
+function Info({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
-    (flags[pair.slice(0, 3)] ?? "🌐") +
-    (flags[pair.slice(3)] ?? "🌐")
+    <div className="info">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   );
 }
 
-function formatNumber(
-  value: number | null | undefined,
-  digits = 6
-): string {
-  if (typeof value !== "number" || !Number.isFinite(value)) {
-    return "—";
-  }
-
-  return value.toLocaleString("pt-BR", {
-    maximumFractionDigits: digits,
-  });
-}
-
-function formatCountdown(milliseconds: number): string {
-  const seconds = Math.max(
-    0,
-    Math.ceil(milliseconds / 1000)
-  );
-
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-
-  return `${String(minutes).padStart(2, "0")}:${String(
-    remainder
-  ).padStart(2, "0")}`;
-}
-
-function formatClock(now: number): string {
-  return new Intl.DateTimeFormat("pt-BR", {
-    timeZone: "UTC",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: false,
-  }).format(now);
-}
-
-interface SignalPanelProps {
-  index: number;
-  symbol: Asset;
-  enabled: boolean;
-  onSymbolChange: (symbol: Asset) => void;
-  onEnabledChange: (enabled: boolean) => void;
-  onConnectionChange: (
-    index: number,
-    connected: boolean
-  ) => void;
-}
-
-function SignalPanel({
-  index,
-  symbol,
-  enabled,
-  onSymbolChange,
-  onEnabledChange,
-  onConnectionChange,
-}: SignalPanelProps) {
+export default function App() {
+  const [symbol, setSymbol] = useState<string>("EURUSD-OTC");
   const [result, setResult] = useState<Result | null>(null);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [lastFetch, setLastFetch] = useState<number | null>(null);
   const [now, setNow] = useState(Date.now());
-
-  const [updatedAt, setUpdatedAt] =
-    useState<number | null>(null);
-
-  const [showDetails, setShowDetails] = useState(false);
+  const [duplicate, setDuplicate] = useState(false);
+  const [auto, setAuto] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  const controllerRef =
-    useRef<AbortController | null>(null);
-
+  const controllerRef = useRef<AbortController | null>(null);
   const generationRef = useRef(0);
+  const selectedRef = useRef(symbol);
+  const candleRef = useRef<string | null>(null);
   const mountedRef = useRef(false);
-  const symbolRef = useRef(symbol);
-  const enabledRef = useRef(enabled);
 
-  const load = useCallback(
-    async (asset: Asset, generation: number) => {
-      // Não consulta painéis desativados.
-      if (!enabledRef.current) return;
+  const changeSymbol = useCallback((nextSymbol: string) => {
+    if (!ASSETS.some((asset) => asset === nextSymbol)) return;
+    if (selectedRef.current === nextSymbol) return;
 
-      // Não permite requisições simultâneas
-      // dentro do mesmo painel.
-      if (controllerRef.current) return;
+    generationRef.current += 1;
+    controllerRef.current?.abort();
+    controllerRef.current = null;
 
-      const controller = new AbortController();
-      controllerRef.current = controller;
+    selectedRef.current = nextSymbol;
+    candleRef.current = null;
 
-      setLoading(true);
-      setError("");
+    setSymbol(nextSymbol);
+    setResult(null);
+    setError("");
+    setLoading(false);
+    setLastFetch(null);
+    setDuplicate(false);
+    setCopied(false);
+  }, []);
 
-      try {
-        const response = await getAnalysis(
-          asset,
-          controller.signal
-        );
+  const load = useCallback(async (
+    requestedSymbol: string,
+    generation: number
+  ) => {
+    if (controllerRef.current) return;
 
-        // Ignora resultados obsoletos.
+    const controller = new AbortController();
+    controllerRef.current = controller;
+
+    setLoading(true);
+    setError("");
+
+    const timeout = window.setTimeout(
+      () => controller.abort(),
+      TIMEOUT_MS
+    );
+
+    try {
+      const response = await getAnalysis(
+        requestedSymbol,
+        controller.signal
+      );
+
+      if (
+        !mountedRef.current ||
+        controller.signal.aborted ||
+        generation !== generationRef.current ||
+        requestedSymbol !== selectedRef.current
+      ) {
+        return;
+      }
+
+      const candle =
+        response.analysis.lastClosedCandle?.closeTime ?? null;
+
+      setDuplicate(
+        Boolean(candle && candleRef.current === candle)
+      );
+
+      candleRef.current = candle;
+      setResult(response);
+      setLastFetch(Date.now());
+      setNow(Date.now());
+    } catch (err) {
+      if (
+        !mountedRef.current ||
+        generation !== generationRef.current ||
+        requestedSymbol !== selectedRef.current
+      ) {
+        return;
+      }
+
+      setError(
+        controller.signal.aborted
+          ? `Tempo limite ao analisar ${requestedSymbol}.`
+          : err instanceof Error
+            ? err.message
+            : `Falha na análise de ${requestedSymbol}.`
+      );
+
+      setResult(null);
+    } finally {
+      window.clearTimeout(timeout);
+
+      if (controllerRef.current === controller) {
+        controllerRef.current = null;
+
         if (
-          !mountedRef.current ||
-          !enabledRef.current ||
-          controller.signal.aborted ||
-          generation !== generationRef.current ||
-          symbolRef.current !== asset
+          mountedRef.current &&
+          generation === generationRef.current
         ) {
-          return;
-        }
-
-        if (response.analysis.symbol !== asset) {
-          throw new Error(
-            "O backend retornou outro ativo."
-          );
-        }
-
-        setResult(response);
-        setUpdatedAt(Date.now());
-        setNow(Date.now());
-        onConnectionChange(index, true);
-      } catch (cause) {
-        if (
-          !mountedRef.current ||
-          !enabledRef.current ||
-          controller.signal.aborted ||
-          generation !== generationRef.current ||
-          symbolRef.current !== asset
-        ) {
-          return;
-        }
-
-        setResult(null);
-        setUpdatedAt(null);
-        onConnectionChange(index, false);
-
-        setError(
-          cause instanceof Error
-            ? cause.message
-            : "Não foi possível consultar a análise."
-        );
-      } finally {
-        if (controllerRef.current === controller) {
-          controllerRef.current = null;
-
-          if (
-            mountedRef.current &&
-            generation === generationRef.current
-          ) {
-            setLoading(false);
-          }
+          setLoading(false);
         }
       }
-    },
-    [index, onConnectionChange]
-  );
+    }
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -238,529 +197,20 @@ function SignalPanel({
   }, []);
 
   useEffect(() => {
-    generationRef.current += 1;
     const generation = generationRef.current;
-
-    symbolRef.current = symbol;
-    enabledRef.current = enabled;
-
-    controllerRef.current?.abort();
-    controllerRef.current = null;
-
-    setResult(null);
-    setError("");
-    setLoading(false);
-    setUpdatedAt(null);
-    setCopied(false);
-    onConnectionChange(index, false);
-
-    // Painel desligado: nenhuma requisição
-    // nem atualização automática.
-    if (!enabled) {
-      return;
-    }
 
     void load(symbol, generation);
 
+    if (!auto) return;
+
     const interval = window.setInterval(() => {
       void load(symbol, generation);
-    }, REFRESH_MS);
+    }, REFRESH_SECONDS * 1000);
 
     return () => {
       window.clearInterval(interval);
-      generationRef.current += 1;
-      controllerRef.current?.abort();
-      controllerRef.current = null;
     };
-  }, [
-    symbol,
-    enabled,
-    index,
-    load,
-    onConnectionChange,
-  ]);
-
-  useEffect(() => {
-    if (!enabled) return;
-
-    const interval = window.setInterval(() => {
-      setNow(Date.now());
-    }, 1000);
-
-    return () => window.clearInterval(interval);
-  }, [enabled]);
-
-  const analysis =
-    enabled && result?.analysis.symbol === symbol
-      ? result.analysis
-      : null;
-
-  const freshness = analysis
-    ? isStale(analysis, now)
-    : { stale: true, reason: "Sem análise atual" };
-
-  const valid = Boolean(
-    enabled && analysis && !freshness.stale && !error
-  );
-
-  const action =
-    valid && analysis ? analysis.action : null;
-
-  const signalClass = action
-    ? action.toLowerCase()
-    : "neutral";
-
-  const reference = analysis?.reference;
-  const indicators = analysis?.indicators;
-
-  const entryMs = reference?.entryTime
-    ? Date.parse(reference.entryTime)
-    : NaN;
-
-  const expirationMs = reference?.expirationTime
-    ? Date.parse(reference.expirationTime)
-    : NaN;
-
-  const beforeEntry =
-    Number.isFinite(entryMs) && now < entryMs;
-
-  const beforeExpiration =
-    Number.isFinite(expirationMs) &&
-    now < expirationMs;
-
-  const countdownTarget = beforeEntry
-    ? entryMs
-    : beforeExpiration
-      ? expirationMs
-      : null;
-
-  const countdownLabel = beforeEntry
-    ? "Até a entrada"
-    : beforeExpiration
-      ? "Até o vencimento"
-      : "Sem contagem ativa";
-
-  const statusText = !enabled
-    ? "Análise pausada"
-    : error
-      ? "Erro na análise"
-      : loading && !analysis
-        ? "Consultando análise"
-        : !analysis
-          ? "Aguardando dados"
-          : freshness.stale
-            ? freshness.reason
-            : action === "CALL"
-              ? "Cenário de alta identificado"
-              : action === "PUT"
-                ? "Cenário de baixa identificado"
-                : "Aguardar confirmação";
-
-  function changeAsset(value: string) {
-    if (!isAsset(value) || value === symbolRef.current) {
-      return;
-    }
-
-    generationRef.current += 1;
-    controllerRef.current?.abort();
-    controllerRef.current = null;
-
-    symbolRef.current = value;
-
-    setResult(null);
-    setError("");
-    setUpdatedAt(null);
-    setLoading(enabled);
-    onConnectionChange(index, false);
-
-    onSymbolChange(value);
-  }
-
-  function toggleEnabled() {
-    const nextEnabled = !enabled;
-
-    // Interrompe imediatamente o painel
-    // ao desligar, sem esperar pelo React.
-    if (!nextEnabled) {
-      enabledRef.current = false;
-      generationRef.current += 1;
-      controllerRef.current?.abort();
-      controllerRef.current = null;
-
-      setResult(null);
-      setError("");
-      setLoading(false);
-      setUpdatedAt(null);
-      setShowDetails(false);
-      onConnectionChange(index, false);
-    }
-
-    onEnabledChange(nextEnabled);
-  }
-
-  function refresh() {
-    if (!enabledRef.current) return;
-    if (controllerRef.current) return;
-
-    void load(
-      symbolRef.current,
-      generationRef.current
-    );
-  }
-
-  async function copyJson() {
-    if (!enabled || !result) return;
-
-    try {
-      await navigator.clipboard.writeText(
-        JSON.stringify(result.raw, null, 2)
-      );
-
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
-  }
-
-  return (
-    <article
-      className="terminal-panel"
-      aria-label={`Painel ${index + 1}: ${symbol}`}
-      style={
-        enabled
-          ? undefined
-          : {
-              opacity: 0.78,
-              borderColor: "#46505c",
-            }
-      }
-    >
-      <div className="panel-header">
-        <div className="panel-asset">
-          <span className="panel-flags">
-            {assetFlags(symbol)}
-          </span>
-
-          <div className="panel-asset-info">
-            <label
-              className="sr-only"
-              htmlFor={`asset-${index}`}
-            >
-              Ativo do painel {index + 1}
-            </label>
-
-            <select
-              id={`asset-${index}`}
-              className="asset-select"
-              value={symbol}
-              onChange={(event) =>
-                changeAsset(event.target.value)
-              }
-            >
-              {ASSETS.map((asset) => (
-                <option key={asset} value={asset}>
-                  {displayAsset(asset)}
-                </option>
-              ))}
-            </select>
-
-            <span className="timeframe">
-              Timeframe: M1 · DEMO
-            </span>
-          </div>
-        </div>
-
-        <div className="panel-tools">
-          <button
-            type="button"
-            onClick={toggleEnabled}
-            aria-pressed={enabled}
-            title={
-              enabled
-                ? "Desativar este painel"
-                : "Ativar este painel"
-            }
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "9px 11px",
-              borderRadius: 8,
-              border: `1px solid ${
-                enabled ? "#16885a" : "#667080"
-              }`,
-              background: enabled
-                ? "#0a3528"
-                : "#252c37",
-              color: enabled
-                ? "#27eb91"
-                : "#c6ced8",
-              fontWeight: 700,
-              fontSize: 11,
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-            }}
-          >
-            <Power size={15} />
-            {enabled ? "ON" : "NONE"}
-          </button>
-
-          {enabled && (
-            <>
-              <div className="timer-box">
-                <Clock3 size={18} />
-
-                <div>
-                  <span>{countdownLabel}</span>
-                  <strong>
-                    {countdownTarget !== null
-                      ? formatCountdown(
-                          countdownTarget - now
-                        )
-                      : "—"}
-                  </strong>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="icon-button"
-                title="Atualizar análise"
-                aria-label={`Atualizar ${symbol}`}
-                disabled={loading}
-                onClick={refresh}
-              >
-                <RefreshCw
-                  size={19}
-                  className={loading ? "spin" : ""}
-                />
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-
-      <div className="panel-content">
-        <p className="signal-caption">
-          {statusText}
-        </p>
-
-        {!enabled ? (
-          <div className="signal-box neutral">
-            <Power size={38} />
-            <span>NONE</span>
-          </div>
-        ) : loading && !analysis ? (
-          <div className="signal-box neutral">
-            <LoaderCircle
-              className="spin"
-              size={38}
-            />
-            <span>CARREGANDO</span>
-          </div>
-        ) : error ? (
-          <div className="signal-box neutral">
-            <ShieldAlert size={38} />
-            <span>ERRO</span>
-          </div>
-        ) : action ? (
-          <div className={`signal-box ${signalClass}`}>
-            {action === "CALL" ? (
-              <ArrowUpRight size={52} />
-            ) : action === "PUT" ? (
-              <ArrowDownRight size={52} />
-            ) : (
-              <Pause size={43} />
-            )}
-            <span>{action}</span>
-          </div>
-        ) : (
-          <div className="signal-box neutral">
-            <Clock3 size={38} />
-            <span>
-              {analysis ? "EXPIRADO" : "SEM DADOS"}
-            </span>
-          </div>
-        )}
-
-        {enabled && error && (
-          <p className="panel-error" role="alert">
-            {error}
-          </p>
-        )}
-
-        {enabled ? (
-          <div className="panel-times">
-            <span>
-              Análise: {timeUTC(analysis?.analysisAt)}
-            </span>
-            <span>
-              Entrada: {timeUTC(reference?.entryTime)}
-            </span>
-            <span>
-              Vencimento:{" "}
-              {timeUTC(reference?.expirationTime)}
-            </span>
-          </div>
-        ) : (
-          <p
-            style={{
-              color: "#94a3b8",
-              fontSize: 12,
-              textAlign: "center",
-              margin: 0,
-            }}
-          >
-            Nenhuma requisição será enviada
-            enquanto este painel estiver desativado.
-          </p>
-        )}
-      </div>
-
-      <div className="panel-footer">
-        <span>
-          {!enabled
-            ? "Painel desativado"
-            : loading
-              ? "Atualizando..."
-              : updatedAt !== null
-                ? `Consultado: ${timeUTC(
-                    new Date(updatedAt).toISOString()
-                  )}`
-                : "Aguardando resposta"}
-        </span>
-
-        {enabled && (
-          <button
-            type="button"
-            className="details-button"
-            onClick={() =>
-              setShowDetails((current) => !current)
-            }
-          >
-            <Code2 size={15} />
-            {showDetails
-              ? "Ocultar detalhes"
-              : "Detalhes"}
-          </button>
-        )}
-      </div>
-
-      {enabled && showDetails && (
-        <div className="panel-details">
-          <div className="detail-grid">
-            <div>
-              <span>EMA 9</span>
-              <strong>
-                {formatNumber(indicators?.ema9)}
-              </strong>
-            </div>
-
-            <div>
-              <span>EMA 21</span>
-              <strong>
-                {formatNumber(indicators?.ema21)}
-              </strong>
-            </div>
-
-            <div>
-              <span>RSI 14</span>
-              <strong>
-                {formatNumber(indicators?.rsi14, 2)}
-              </strong>
-            </div>
-
-            <div>
-              <span>ADX 14</span>
-              <strong>
-                {formatNumber(indicators?.adx14, 2)}
-              </strong>
-            </div>
-
-            <div>
-              <span>ATR 14</span>
-              <strong>
-                {formatNumber(indicators?.atr14)}
-              </strong>
-            </div>
-
-            <div>
-              <span>Preço</span>
-              <strong>
-                {formatNumber(reference?.price)}
-              </strong>
-            </div>
-          </div>
-
-          <h3>Motivos da análise</h3>
-
-          {analysis?.reasons?.length ? (
-            <ul>
-              {analysis.reasons.map((reason, i) => (
-                <li key={i}>{reason}</li>
-              ))}
-            </ul>
-          ) : (
-            <p className="muted">
-              Nenhum motivo disponível.
-            </p>
-          )}
-
-          <div className="json-heading">
-            <h3>Resposta JSON</h3>
-
-            <button
-              type="button"
-              className="details-button"
-              disabled={!result}
-              onClick={() => void copyJson()}
-            >
-              <Copy size={15} />
-              {copied ? "Copiado" : "Copiar"}
-            </button>
-          </div>
-
-          <pre className="json-output">
-            {result
-              ? JSON.stringify(result.raw, null, 2)
-              : "Sem resposta disponível."}
-          </pre>
-        </div>
-      )}
-    </article>
-  );
-}
-
-export default function App() {
-  const [assets, setAssets] = useState<Asset[]>(
-    [...INITIAL_ASSETS]
-  );
-
-  // Somente o primeiro painel inicia ativo.
-  const [enabledPanels, setEnabledPanels] = useState<
-    boolean[]
-  >([true, false, false, false]);
-
-  const [now, setNow] = useState(Date.now());
-
-  const [connections, setConnections] = useState<
-    boolean[]
-  >([false, false, false, false]);
-
-  const updateConnection = useCallback(
-    (index: number, connected: boolean) => {
-      setConnections((current) => {
-        if (current[index] === connected) {
-          return current;
-        }
-
-        return current.map((value, position) =>
-          position === index ? connected : value
-        );
-      });
-    },
-    []
-  );
+  }, [symbol, auto, load]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -770,133 +220,337 @@ export default function App() {
     return () => window.clearInterval(interval);
   }, []);
 
-  function updateAsset(index: number, symbol: Asset) {
-    setAssets((current) =>
-      current.map((asset, position) =>
-        position === index ? symbol : asset
-      )
-    );
+  const analysis =
+    result?.analysis.symbol === symbol
+      ? result.analysis
+      : undefined;
+
+  const freshness = analysis
+    ? isStale(analysis, now)
+    : { stale: true, reason: "Sem análise atual" };
+
+  const current = Boolean(
+    analysis && !freshness.stale && !error
+  );
+
+  const action = current ? analysis!.action : null;
+
+  const mode =
+    action === "CALL"
+      ? "call"
+      : action === "PUT"
+        ? "put"
+        : "wait";
+
+  const status = error
+    ? "Erro na análise"
+    : loading && !analysis
+      ? "Consultando..."
+      : current
+        ? "Dados recebidos"
+        : "Sem sinal atual";
+
+  async function copyJSON() {
+    if (!result || !analysis) return;
+
+    try {
+      await navigator.clipboard.writeText(
+        JSON.stringify(result.raw, null, 2)
+      );
+
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Não foi possível copiar o JSON.");
+    }
   }
-
-  function updateEnabled(
-    index: number,
-    enabled: boolean
-  ) {
-    setEnabledPanels((current) =>
-      current.map((value, position) =>
-        position === index ? enabled : value
-      )
-    );
-  }
-
-  const activeCount = enabledPanels.filter(
-    Boolean
-  ).length;
-
-  const connectedCount = connections.filter(
-    (connected, index) =>
-      connected && enabledPanels[index]
-  ).length;
 
   return (
-    <div className="terminal-app">
-      <header className="terminal-topbar">
-        <div className="terminal-brand">
-          <div className="terminal-logo">
-            <Activity size={26} strokeWidth={3} />
+    <div className="shell">
+      <header className="topbar">
+        <div className="brand">
+          <div className="brandIcon">
+            <span />
+            <span />
+            <span />
           </div>
-          <strong>TradePulse</strong>
+
+          <div>
+            <h1>
+              Trade<span>Pulse</span>
+            </h1>
+            <p>Análise de Mercado</p>
+          </div>
         </div>
 
-        <nav
-          className="top-assets"
-          aria-label="Ativos monitorados"
-        >
-          {assets.map((asset, index) => (
-            <div className="top-asset" key={index}>
-              <span className="top-flag">
-                {assetFlags(asset)}
-              </span>
+        <div className="topright">
+          <div className="pill">
+            <span className="iq">▥</span>
+            IQ Option · DEMO
+          </div>
 
-              <div>
-                <strong>{displayAsset(asset)}</strong>
-                <small>
-                  {enabledPanels[index]
-                    ? `M1 · Painel ${index + 1} · ON`
-                    : `Painel ${index + 1} · NONE`}
-                </small>
-              </div>
-            </div>
-          ))}
-        </nav>
-
-        <div className="top-status">
-          <span className="practice-badge">
-            <span className="status-dot" />
-            PRACTICE
-          </span>
-
-          <span className="top-clock">
-            {formatClock(now)}
-            <small>UTC</small>
-          </span>
+          <div className={`pill status ${current ? "online" : "offline"}`}>
+            {current ? <Wifi size={17} /> : <WifiOff size={17} />}
+            {status}
+          </div>
         </div>
       </header>
 
-      <div className="terminal-body">
-        <aside className="terminal-sidebar">
-          <div className="sidebar-item active">
-            <Activity size={24} />
-            <span>Análise</span>
-          </div>
+      <div className="marketSelector">
+        <div className="marketField">
+          <label htmlFor="asset-select">Ativo</label>
 
-          <div className="sidebar-spacer" />
-
-          <div className="sidebar-bottom">
-            <ShieldAlert size={24} />
-          </div>
-        </aside>
-
-        <main className="terminal-main">
-          <div className="signal-grid">
-            {assets.map((asset, index) => (
-              <SignalPanel
-                key={index}
-                index={index}
-                symbol={asset}
-                enabled={enabledPanels[index]}
-                onSymbolChange={(next) =>
-                  updateAsset(index, next)
-                }
-                onEnabledChange={(next) =>
-                  updateEnabled(index, next)
-                }
-                onConnectionChange={updateConnection}
-              />
+          <select
+            id="asset-select"
+            value={symbol}
+            onChange={(event) => changeSymbol(event.target.value)}
+          >
+            {ASSETS.map((asset) => (
+              <option key={asset} value={asset}>
+                {asset}
+              </option>
             ))}
+          </select>
+        </div>
+
+        <div className="marketField">
+          <span>Timeframe</span>
+          <strong>M1 (1 minuto)</strong>
+        </div>
+
+        <div className="marketField">
+          <span>Fonte</span>
+          <strong>IQ Option DEMO</strong>
+        </div>
+      </div>
+
+      <div className="toolbar">
+        <div className="toolbarText">
+          <span className="eyebrow">
+            MONITORAMENTO DE MERCADO
+          </span>
+          <p>Somente leitura · Nenhuma ordem é enviada</p>
+        </div>
+
+        <div className="actions">
+          <button
+            className={`secondary ${auto ? "selected" : ""}`}
+            onClick={() => setAuto((value) => !value)}
+          >
+            {auto ? <Activity size={16} /> : <Pause size={16} />}
+            Auto {auto ? "ligado" : "desligado"} (60s)
+          </button>
+
+          <button
+            className="primary"
+            disabled={loading}
+            onClick={() =>
+              void load(selectedRef.current, generationRef.current)
+            }
+          >
+            {loading ? (
+              <LoaderCircle className="spin" size={16} />
+            ) : (
+              <RefreshCw size={16} />
+            )}
+            Atualizar análise
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="error" role="alert">
+          <ShieldAlert size={20} />
+          <div>
+            <strong>Falha na análise de {symbol}</strong>
+            <p>{error}</p>
+          </div>
+        </div>
+      )}
+
+      <main className="layout">
+        <section className="signalCard panel">
+          <div
+            className={`signalHero ${mode} ${
+              !current ? "inactive" : ""
+            }`}
+          >
+            <div className="signalTitle">SINAL</div>
+
+            <div className="signalMain">
+              {action === "CALL" ? (
+                <ArrowUpRight />
+              ) : action === "PUT" ? (
+                <ArrowDownRight />
+              ) : (
+                <Timer />
+              )}
+
+              <strong>
+                {action ?? (loading ? "..." : "—")}
+              </strong>
+            </div>
+
+            <div className="signalSubtitle">
+              {error
+                ? "Análise indisponível"
+                : loading && !analysis
+                  ? `Analisando ${symbol}...`
+                  : !current
+                    ? freshness.reason
+                    : action === "CALL"
+                      ? "Cenário de alta identificado"
+                      : action === "PUT"
+                        ? "Cenário de baixa identificado"
+                        : "Aguardar confirmação"}
+            </div>
           </div>
 
-          <footer className="terminal-footer">
-            <span className="footer-note">
-              <ShieldAlert size={17} />
-              Somente leitura. Nenhuma ordem é enviada.
+          <div className="details">
+            <Info label="Ativo" value={symbol} />
+            <Info label="Timeframe" value="M1 (1 minuto)" />
+            <Info label="Conta" value={analysis?.accountMode ?? "—"} />
+            <Info label="Fonte" value={analysis?.source ?? "—"} />
+            <Info
+              label="Última análise"
+              value={timeUTC(analysis?.analysisAt)}
+            />
+            <Info
+              label="Último candle fechado"
+              value={timeUTC(analysis?.lastClosedCandle?.closeTime)}
+            />
+            <Info
+              label="Entrada de referência"
+              value={timeUTC(analysis?.reference?.entryTime)}
+            />
+            <Info
+              label="Vencimento"
+              value={timeUTC(analysis?.reference?.expirationTime)}
+            />
+            <Info
+              label="Preço de referência"
+              value={number(analysis?.reference?.price)}
+            />
+          </div>
+        </section>
+
+        <section className="rightColumn">
+          <div className="panel indicators">
+            <h2>
+              <ChartNoAxesColumnIncreasing />
+              Indicadores
+            </h2>
+
+            <div className="indicatorGrid">
+              {indicators
+                .filter(
+                  (item) =>
+                    item.key !== "ma50" ||
+                    analysis?.indicators.ma50 != null
+                )
+                .map((item) => (
+                  <div className="indicator" key={item.key}>
+                    <span>{item.label}</span>
+                    <strong>
+                      {number(
+                        analysis?.indicators[item.key],
+                        item.digits
+                      )}
+                    </strong>
+                    <div
+                      className="indicatorLine"
+                      style={{ background: item.color }}
+                    />
+                  </div>
+                ))}
+            </div>
+          </div>
+
+          <div className="panel reasons">
+            <h2>
+              <Check />
+              Motivos do Sinal
+            </h2>
+
+            {analysis?.reasons?.length ? (
+              <ul>
+                {analysis.reasons.map((reason, index) => (
+                  <li key={index}>
+                    <Check size={17} />
+                    <span>{reason}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">
+                Nenhum motivo disponível na análise atual.
+              </p>
+            )}
+          </div>
+
+          <div className="panel jsonPanel">
+            <details>
+              <summary>
+                <span>
+                  <Code2 />
+                  JSON (Resposta Completa)
+                </span>
+                <span className="muted">Ver resposta JSON</span>
+              </summary>
+
+              <div className="jsonActions">
+                <button
+                  className="secondary"
+                  disabled={!analysis}
+                  onClick={() => void copyJSON()}
+                >
+                  {copied ? (
+                    <Check size={16} />
+                  ) : (
+                    <Clipboard size={16} />
+                  )}
+                  {copied ? "Copiado!" : "Copiar JSON"}
+                </button>
+              </div>
+
+              <pre>
+                {analysis
+                  ? JSON.stringify(result?.raw, null, 2)
+                  : "Nenhuma resposta disponível."}
+              </pre>
+            </details>
+          </div>
+
+          <div className="panel metadata">
+            <span>
+              <Clock3 size={16} />
+              Última atualização:{" "}
+              {lastFetch
+                ? timeUTC(new Date(lastFetch).toISOString())
+                : "—"}
             </span>
 
-            <span className="footer-refresh">
-              <RefreshCw size={17} />
-              {activeCount === 0
-                ? "Todas as análises pausadas"
-                : `${activeCount} painel(is) ativo(s) · Atualização: 60s`}
+            <span>
+              {duplicate
+                ? "Candle repetido"
+                : "Atualização por HTTP"}
             </span>
 
-            <span className="footer-connection">
-              <Activity size={17} />
-              {connectedCount}/{activeCount} painéis
-              com resposta válida da API
+            <span>
+              {freshness.stale
+                ? freshness.reason
+                : "Análise dentro da janela de referência"}
             </span>
-          </footer>
-        </main>
-      </div>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <TrendingUp size={16} />
+        TradePulse é uma ferramenta informativa.
+        Nenhuma ordem é enviada. Sinais não garantem resultados.
+        {analysis?.disclaimer ?? ""}
+      </footer>
     </div>
   );
 }
