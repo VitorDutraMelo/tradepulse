@@ -1,0 +1,21 @@
+cd "C:\Users\vitor\OneDrive\Documents\GitHub\tradepulse"
+
+# Criar uma copia de seguranca do arquivo atual
+Copy-Item "frontend/src/App.tsx" "frontend/src/App.tsx.bak" -Force
+
+# Recuperar o App.tsx original de um painel
+git show 2d0d69a:frontend/src/App.tsx | Set-Content "frontend/src/App.tsx" -Encoding utf8
+
+# Garantir a importacao do CSS
+$appPath = "frontend/src/App.tsx"
+$app = Get-Content $appPath -Raw
+
+if ($app -notmatch 'import\s+["'']\./style\.css["'']') {
+    $app = 'import "./style.css";' + [Environment]::NewLine + $app
+    Set-Content $appPath -Value $app -Encoding utf8
+}
+
+# Verificar e compilar
+cd frontend
+
+npm.cmd run build

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "recordId": "iq-demo-binary-20261110-174141-558818-eurusd-otc-aaac1fb241",
+  "recordedAt": "2026-11-10T17:41:41.558818+00:00",
+  "source": "iq_option_demo",
+  "accountMode": "PRACTICE",
+  "analysis": {
+    "symbol": "EURUSD-OTC",
+    "timeframe": "1m",
+    "analysisAt": "2026-11-10T17:41:41.558818+00:00",
+    "action": "PUT",
+    "reasons": [
+      "EMA 9 (1.128502) is below EMA 21 (1.128927).",
+      "RSI 14 (42.29) is inside the configured PUT momentum range.",
+      "ADX 14 (21.50) confirms the configured minimum trend strength."
+    ],
+    "lastClosedCandle": {
+      "openTime": "2026-11-10T17:40:00+00:00",
+      "closeTime": "2026-11-10T17:41:00+00:00",
+      "ageSeconds": 41.558818
+    },
+    "indicators": {
+      "ema9": 1.12850220806119,
+      "ema21": 1.1289274591745835,
+      "rsi14": 42.287589434671666,
+      "adx14": 21.49984540429858,
+      "atr14": 0.0006282101811925805
+    },
+    "reference": {
+      "price": 1.128485,
+      "entryTime": "2026-11-10T17:42:00+00:00",
+      "expirationTime": "2026-11-10T17:43:00+00:00"
+    }
+  },
+  "outcome": {
+    "status": "WIN",
+    "settledAt": "2026-11-10T17:43:52.412373+00:00",
+    "settlementPrice": 1.127835
+  },
+  "disclaimer": "Technical reference only. No IQ Option order was sent. WIN, LOSS and DRAW are not broker settlement records."
+}

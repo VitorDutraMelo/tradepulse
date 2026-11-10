@@ -1,0 +1,359 @@
+
+export type Action = "CALL" | "PUT" | "WAIT";
+export type Timeframe = "1m" | "5m";
+
+export interface Analysis {
+  symbol: string;
+  timeframe: Timeframe;
+  source: string;
+  accountMode: string;
+  analysisAt: string;
+  lastClosedCandle: {
+    openTime: string;
+    closeTime: string;
+    ageSeconds: number;
+  };
+  indicators: {
+    ema9: number | null;
+    ema21: number | null;
+    rsi14: number | null;
+    adx14: number | null;
+    atr14: number | null;
+  };
+  action: Action;
+  reference: {
+    price: number | null;
+    entryTime: string;
+    expirationTime: string;
+  };
+  reasons: string[];
+  disclaimer: string;
+}
+
+export interface Result {
+  analysis: Analysis;
+  raw: unknown;
+}
+
+const BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://localhost:3001"
+).replace(/\/$/, "");
+
+function isRecord(
+  value: unknown
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+function validDate(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+function validNumber(value: unknown): boolean {
+  return (
+    value === null ||
+    (typeof value === "number" && Number.isFinite(value))
+  );
+}
+
+export function parseAnalysis(raw: unknown): Analysis {
+  if (!isRecord(raw)) {
+    throw new Error("Resposta JSON inválida.");
+  }
+
+  if (
+    typeof raw.symbol !== "string" ||
+    !raw.symbol ||
+    (raw.timeframe !== "1m" && raw.timeframe !== "5m") ||
+    !validDate(raw.analysisAt)
+  ) {
+    throw new Error("Dados principais da análise inválidos.");
+  }
+
+  if (
+    raw.action !== "CALL" &&
+    raw.action !== "PUT" &&
+    raw.action !== "WAIT"
+  ) {
+    throw new Error("Ação inválida na resposta.");
+  }
+
+  if (
+    typeof raw.source !== "string" ||
+    typeof raw.accountMode !== "string" ||
+    typeof raw.disclaimer !== "string"
+  ) {
+    throw new Error("Metadados da análise inválidos.");
+  }
+
+  if (!isRecord(raw.indicators)) {
+    throw new Error("Indicadores ausentes.");
+  }
+
+  for (const key of [
+    "ema9",
+    "ema21",
+    "rsi14",
+    "adx14",
+    "atr14",
+  ]) {
+    if (!validNumber(raw.indicators[key])) {
+      throw new Error(`Indicador inválido: ${key}`);
+    }
+  }
+
+  if (
+    !isRecord(raw.lastClosedCandle) ||
+    !validDate(raw.lastClosedCandle.openTime) ||
+    !validDate(raw.lastClosedCandle.closeTime) ||
+    typeof raw.lastClosedCandle.ageSeconds !== "number" ||
+    !Number.isFinite(raw.lastClosedCandle.ageSeconds)
+  ) {
+    throw new Error("Dados da última vela inválidos.");
+  }
+
+  if (
+    !isRecord(raw.reference) ||
+    !validNumber(raw.reference.price) ||
+    !validDate(raw.reference.entryTime) ||
+    !validDate(raw.reference.expirationTime)
+  ) {
+    throw new Error("Referência temporal inválida.");
+  }
+
+  if (
+    Date.parse(raw.reference.entryTime) >=
+    Date.parse(raw.reference.expirationTime)
+  ) {
+    throw new Error(
+      "O vencimento deve ser posterior à entrada."
+    );
+  }
+
+  if (
+    !Array.isArray(raw.reasons) ||
+    !raw.reasons.every(
+      (reason: unknown) => typeof reason === "string"
+    )
+  ) {
+    throw new Error("Motivos da análise inválidos.");
+  }
+
+  return raw as unknown as Analysis;
+}
+
+export async function getAnalysis(
+  symbol: string,
+  timeframe: Timeframe,
+  signal: AbortSignal
+): Promise<Result> {
+  if (!/^[A-Z0-9]+-OTC$/.test(symbol)) {
+    throw new Error("Símbolo inválido.");
+  }
+
+  if (timeframe !== "1m" && timeframe !== "5m") {
+    throw new Error("Timeframe inválido.");
+  }
+
+  const params = new URLSearchParams({
+    symbol,
+    timeframe,
+    limit: "120",
+  });
+
+  const url =
+    `${BASE_URL}/api/v1/iq-option/demo/market-analysis?${params.toString()}`;
+
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      signal,
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+  } catch (error) {
+    if (signal.aborted) {
+      throw error;
+    }
+
+    throw new Error(
+      `Não foi possível consultar ${symbol} (${timeframe}). Verifique o backend, a rede e o CORS.`
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      `Falha na análise de ${symbol} (${timeframe}): HTTP ${response.status}.`
+    );
+  }
+
+  let raw: unknown;
+
+  try {
+    raw = await response.json();
+  } catch {
+    throw new Error("O backend retornou JSON inválido.");
+  }
+
+  const analysis = parseAnalysis(raw);
+
+  if (
+    analysis.symbol !== symbol ||
+    analysis.timeframe !== timeframe
+  ) {
+    throw new Error(
+      `Resposta incompatível com ${symbol} (${timeframe}).`
+    );
+  }
+
+  return { analysis, raw };
+}
+
+export function timeUTC(
+  value?: string | null
+): string {
+  if (!value || !validDate(value)) {
+    return "—";
+  }
+
+  return (
+    new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "UTC",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+      hourCycle: "h23",
+    }).format(new Date(value)) + " UTC"
+  );
+}
+
+export function number(
+  value?: number | null,
+  digits = 6
+): string {
+  return (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  )
+    ? value.toLocaleString("pt-BR", {
+        maximumFractionDigits: digits,
+      })
+    : "Indisponível";
+}
+
+export type ReferencePhase =
+  | "before"
+  | "during"
+  | "expired"
+  | "wait"
+  | "invalid";
+
+export function getReferencePhase(
+  analysis: Analysis,
+  now: number
+): ReferencePhase {
+  if (analysis.action === "WAIT") {
+    return "wait";
+  }
+
+  const entry = Date.parse(analysis.reference.entryTime);
+  const expiration = Date.parse(
+    analysis.reference.expirationTime
+  );
+
+  if (
+    !Number.isFinite(entry) ||
+    !Number.isFinite(expiration) ||
+    expiration <= entry
+  ) {
+    return "invalid";
+  }
+
+  if (now < entry) {
+    return "before";
+  }
+
+  if (now < expiration) {
+    return "during";
+  }
+
+  return "expired";
+}
+
+export function getReferenceMessage(
+  phase: ReferencePhase
+): string {
+  switch (phase) {
+    case "before":
+      return "Aguardando abertura da vela de referência";
+    case "during":
+      return "Janela de referência em andamento";
+    case "expired":
+      return "Sinal expirado";
+    case "wait":
+      return "Aguardar confirmação";
+    default:
+      return "Horários de referência inválidos";
+  }
+}
+
+export function isStale(
+  analysis: Analysis,
+  now: number
+): { stale: boolean; reason: string } {
+  const analysisTime = Date.parse(analysis.analysisAt);
+  const closeTime = Date.parse(
+    analysis.lastClosedCandle.closeTime
+  );
+
+  if (analysisTime > now + 60_000) {
+    return {
+      stale: true,
+      reason: "Horário da análise inconsistente",
+    };
+  }
+
+  if (closeTime > now + 60_000) {
+    return {
+      stale: true,
+      reason: "Horário da vela inconsistente",
+    };
+  }
+
+  const timeframeMs =
+    analysis.timeframe === "5m" ? 300_000 : 60_000;
+
+  const maximumAgeMs = timeframeMs * 2;
+
+  if (now - analysisTime > maximumAgeMs) {
+    return {
+      stale: true,
+      reason: "Análise desatualizada",
+    };
+  }
+
+  if (now - closeTime > maximumAgeMs) {
+    return {
+      stale: true,
+      reason: "Candle desatualizado",
+    };
+  }
+
+  return { stale: false, reason: "" };
+}
