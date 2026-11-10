@@ -14,6 +14,14 @@ import {
   type IqOptionDemoAnalysisResponse,
 } from "../iq-option-demo-analysis/iq-option-demo-analysis.schema";
 import {
+  iqOptionDemoBinarySignalHistoryResponseSchema,
+  iqOptionDemoBinarySignalRecordResponseSchema,
+  type IqOptionDemoBinarySignalHistoryRequest,
+  type IqOptionDemoBinarySignalHistoryResponse,
+  type IqOptionDemoBinarySignalRecordRequest,
+  type IqOptionDemoBinarySignalRecordResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-binary-signal-history.schema";
+import {
   iqOptionSignalResponseSchema,
   type IqOptionSignalRequest,
   type IqOptionSignalResponse,
@@ -77,6 +85,16 @@ export interface QuantEngineIqOptionDemoHistoryClient {
   ): Promise<IqOptionDemoAnalysisRecordResponse>;
 }
 
+export interface QuantEngineIqOptionDemoBinarySignalHistoryClient {
+  listIqOptionDemoBinarySignals(
+    input: IqOptionDemoBinarySignalHistoryRequest,
+  ): Promise<IqOptionDemoBinarySignalHistoryResponse>;
+
+  getIqOptionDemoBinarySignalRecord(
+    input: IqOptionDemoBinarySignalRecordRequest,
+  ): Promise<IqOptionDemoBinarySignalRecordResponse>;
+}
+
 export type PythonQuantEngineClientConfig = {
   pythonExecutable: string;
   workingDirectory: string;
@@ -122,7 +140,8 @@ export class PythonQuantEngineClient
     QuantEngineMarketDataClient,
     QuantEngineIqOptionSignalClient,
     QuantEngineIqOptionDemoAnalysisClient,
-    QuantEngineIqOptionDemoHistoryClient
+    QuantEngineIqOptionDemoHistoryClient,
+    QuantEngineIqOptionDemoBinarySignalHistoryClient
 {
   constructor(
     private readonly config: PythonQuantEngineClientConfig,
@@ -270,6 +289,50 @@ export class PythonQuantEngineClient
     if (!parsedPayload.success) {
       throw new QuantEngineClientError(
         "The Quant Engine returned an invalid IQ Option demo record payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async listIqOptionDemoBinarySignals(
+    input: IqOptionDemoBinarySignalHistoryRequest,
+  ): Promise<IqOptionDemoBinarySignalHistoryResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_binary_signal_history",
+      "--limit",
+      String(input.limit),
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoBinarySignalHistoryResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option DEMO binary signal history payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async getIqOptionDemoBinarySignalRecord(
+    input: IqOptionDemoBinarySignalRecordRequest,
+  ): Promise<IqOptionDemoBinarySignalRecordResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_binary_signal_history",
+      "--record-id",
+      input.recordId,
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoBinarySignalRecordResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option DEMO binary signal record payload.",
       );
     }
 

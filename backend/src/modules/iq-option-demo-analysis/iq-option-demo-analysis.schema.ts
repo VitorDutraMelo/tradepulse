@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 
 export const iqOptionDemoAnalysisRequestSchema = z.object({
   symbol: z
@@ -16,6 +16,20 @@ export const iqOptionDemoAnalysisRequestSchema = z.object({
     .min(29, "limit must be at least 29 for EMA, RSI, ADX and ATR analysis")
     .max(1000, "limit must not exceed 1000")
     .default(100),
+});
+
+const trackingSchema = z.object({
+  recordId: z.string().min(1).nullable(),
+  status: z.enum([
+    "PENDING",
+    "WIN",
+    "LOSS",
+    "DRAW",
+    "NOT_APPLICABLE",
+    "UNAVAILABLE",
+  ]),
+  settledAt: z.string().min(1).nullable(),
+  settlementPrice: z.number().finite().nullable(),
 });
 
 export const iqOptionDemoAnalysisResponseSchema = z.object({
@@ -44,6 +58,7 @@ export const iqOptionDemoAnalysisResponseSchema = z.object({
   }),
   reasons: z.array(z.string().min(1)).min(1),
   disclaimer: z.string().min(1),
+  tracking: trackingSchema.optional(),
 });
 
 export type IqOptionDemoAnalysisRequest = z.infer<

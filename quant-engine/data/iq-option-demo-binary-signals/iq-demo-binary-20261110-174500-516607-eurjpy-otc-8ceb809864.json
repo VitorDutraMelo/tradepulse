@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "recordId": "iq-demo-binary-20261110-174500-516607-eurjpy-otc-8ceb809864",
+  "recordedAt": "2026-11-10T17:45:00.516607+00:00",
+  "source": "iq_option_demo",
+  "accountMode": "PRACTICE",
+  "analysis": {
+    "symbol": "EURJPY-OTC",
+    "timeframe": "5m",
+    "analysisAt": "2026-11-10T17:45:00.516607+00:00",
+    "action": "CALL",
+    "reasons": [
+      "EMA 9 (177.377195) is above EMA 21 (177.289009).",
+      "RSI 14 (54.98) is inside the configured CALL momentum range.",
+      "ADX 14 (29.88) confirms the configured minimum trend strength."
+    ],
+    "lastClosedCandle": {
+      "openTime": "2026-11-10T17:40:00+00:00",
+      "closeTime": "2026-11-10T17:45:00+00:00",
+      "ageSeconds": 0.516607
+    },
+    "indicators": {
+      "ema9": 177.37719517632078,
+      "ema21": 177.2890086802868,
+      "rsi14": 54.980919078401136,
+      "adx14": 29.87733863023288,
+      "atr14": 0.12618978895338742
+    },
+    "reference": {
+      "price": 177.363035,
+      "entryTime": "2026-11-10T17:50:00+00:00",
+      "expirationTime": "2026-11-10T17:55:00+00:00"
+    }
+  },
+  "outcome": {
+    "status": "PENDING",
+    "settledAt": null,
+    "settlementPrice": null
+  },
+  "disclaimer": "Technical reference only. No IQ Option order was sent. WIN, LOSS and DRAW are not broker settlement records."
+}
