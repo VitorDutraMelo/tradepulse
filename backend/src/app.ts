@@ -7,6 +7,8 @@ import { createIqOptionDemoAnalysisRouter } from "./modules/iq-option-demo-analy
 import { createIqOptionDemoAnalysisHistoryRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis-history.router";
 import { createIqOptionDemoBinarySignalHistoryRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-binary-signal-history.router";
 import { CachedIqOptionDemoAnalysisClient } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis-cache";
+import { createIqOptionRealTradingRouter } from "./modules/iq-option-real-trading/iq-option-real-trading.router";
+import { IqOptionRealTradingSafetyPolicy } from "./modules/iq-option-real-trading/iq-option-real-trading.policy";
 import { createIqOptionSignalRouter } from "./modules/iq-option-signals/iq-option-signal.router";
 import { createMarketAnalysisRouter } from "./modules/market-analysis/market-analysis.router";
 import {
@@ -64,6 +66,15 @@ export function createApp(dependencies: AppDependencies = {}) {
     dependencies.quantEngineIqOptionDemoBinarySignalHistoryClient ??
     defaultQuantEngineClient;
 
+  const realTradingSafetyPolicy = new IqOptionRealTradingSafetyPolicy({
+    tradingEnabled: env.IQ_OPTION_REAL_TRADING_ENABLED,
+    killSwitchActive: env.IQ_OPTION_REAL_KILL_SWITCH,
+    maxStake: env.IQ_OPTION_REAL_MAX_STAKE,
+    maxDailyLoss: env.IQ_OPTION_REAL_MAX_DAILY_LOSS,
+    maxDailyOrders: env.IQ_OPTION_REAL_MAX_DAILY_ORDERS,
+    cooldownSeconds: env.IQ_OPTION_REAL_COOLDOWN_SECONDS,
+  });
+
   app.use(helmet());
 
   app.use(
@@ -115,6 +126,11 @@ export function createApp(dependencies: AppDependencies = {}) {
     createIqOptionDemoBinarySignalHistoryRouter(
       quantEngineIqOptionDemoBinarySignalHistoryClient,
     ),
+  );
+
+  app.use(
+    "/api/v1/iq-option/real",
+    createIqOptionRealTradingRouter(realTradingSafetyPolicy),
   );
 
   return app;
