@@ -1,33 +1,33 @@
 
 export type Action = "CALL" | "PUT" | "WAIT";
+export type Timeframe = "1m" | "5m" | "15m" | "1h";
 
 export interface Analysis {
   symbol: string;
-  timeframe: string;
-  source?: string;
-  accountMode?: string;
+  timeframe: Timeframe;
+  source: string;
+  accountMode: string;
   analysisAt: string;
-  lastClosedCandle?: {
-    openTime?: string;
-    closeTime?: string;
-    ageSeconds?: number;
+  lastClosedCandle: {
+    openTime: string;
+    closeTime: string;
+    ageSeconds: number;
   };
   indicators: {
-    ema9?: number | null;
-    ema21?: number | null;
-    ma50?: number | null;
-    rsi14?: number | null;
-    adx14?: number | null;
-    atr14?: number | null;
+    ema9: number | null;
+    ema21: number | null;
+    rsi14: number | null;
+    adx14: number | null;
+    atr14: number | null;
   };
   action: Action;
-  reference?: {
-    price?: number | null;
-    entryTime?: string | null;
-    expirationTime?: string | null;
+  reference: {
+    price: number | null;
+    entryTime: string;
+    expirationTime: string;
   };
-  reasons?: string[];
-  disclaimer?: string;
+  reasons: string[];
+  disclaimer: string;
 }
 
 export interface Result {
@@ -40,21 +40,29 @@ const BASE_URL = (
   "http://localhost:3001"
 ).replace(/\/$/, "");
 
-const isRecord = (
+function isRecord(
   value: unknown
-): value is Record<string, unknown> =>
-  typeof value === "object" &&
-  value !== null &&
-  !Array.isArray(value);
+): value is Record<string, unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
 
-const validDate = (value: unknown): value is string =>
-  typeof value === "string" &&
-  Number.isFinite(Date.parse(value));
+function validDate(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    Number.isFinite(Date.parse(value))
+  );
+}
 
-const validNumber = (value: unknown): boolean =>
-  value === null ||
-  value === undefined ||
-  (typeof value === "number" && Number.isFinite(value));
+function validNumber(value: unknown): boolean {
+  return (
+    value === null ||
+    (typeof value === "number" && Number.isFinite(value))
+  );
+}
 
 export function parseAnalysis(raw: unknown): Analysis {
   if (!isRecord(raw)) {
@@ -64,7 +72,7 @@ export function parseAnalysis(raw: unknown): Analysis {
   if (
     typeof raw.symbol !== "string" ||
     !raw.symbol ||
-    raw.timeframe !== "1m" ||
+    (!["1m", "5m", "15m", "1h"].includes(raw.timeframe as string)) ||
     !validDate(raw.analysisAt)
   ) {
     throw new Error("Dados principais da análise inválidos.");
@@ -78,6 +86,14 @@ export function parseAnalysis(raw: unknown): Analysis {
     throw new Error("Ação inválida na resposta.");
   }
 
+  if (
+    typeof raw.source !== "string" ||
+    typeof raw.accountMode !== "string" ||
+    typeof raw.disclaimer !== "string"
+  ) {
+    throw new Error("Metadados da análise inválidos.");
+  }
+
   if (!isRecord(raw.indicators)) {
     throw new Error("Indicadores ausentes.");
   }
@@ -85,7 +101,6 @@ export function parseAnalysis(raw: unknown): Analysis {
   for (const key of [
     "ema9",
     "ema21",
-    "ma50",
     "rsi14",
     "adx14",
     "atr14",
@@ -96,51 +111,38 @@ export function parseAnalysis(raw: unknown): Analysis {
   }
 
   if (
-    raw.reference !== undefined &&
-    !isRecord(raw.reference)
+    !isRecord(raw.lastClosedCandle) ||
+    !validDate(raw.lastClosedCandle.openTime) ||
+    !validDate(raw.lastClosedCandle.closeTime) ||
+    typeof raw.lastClosedCandle.ageSeconds !== "number" ||
+    !Number.isFinite(raw.lastClosedCandle.ageSeconds)
   ) {
-    throw new Error("Referência inválida.");
-  }
-
-  if (isRecord(raw.reference)) {
-    if (!validNumber(raw.reference.price)) {
-      throw new Error("Preço de referência inválido.");
-    }
-
-    for (const key of ["entryTime", "expirationTime"]) {
-      if (
-        raw.reference[key] != null &&
-        !validDate(raw.reference[key])
-      ) {
-        throw new Error(`Horário inválido: ${key}`);
-      }
-    }
+    throw new Error("Dados da última vela inválidos.");
   }
 
   if (
-    raw.lastClosedCandle !== undefined &&
-    !isRecord(raw.lastClosedCandle)
+    !isRecord(raw.reference) ||
+    !validNumber(raw.reference.price) ||
+    !validDate(raw.reference.entryTime) ||
+    !validDate(raw.reference.expirationTime)
   ) {
-    throw new Error("Último candle inválido.");
-  }
-
-  if (isRecord(raw.lastClosedCandle)) {
-    for (const key of ["openTime", "closeTime"]) {
-      if (
-        raw.lastClosedCandle[key] != null &&
-        !validDate(raw.lastClosedCandle[key])
-      ) {
-        throw new Error(`Horário do candle inválido: ${key}`);
-      }
-    }
+    throw new Error("Referência temporal inválida.");
   }
 
   if (
-    raw.reasons !== undefined &&
-    (!Array.isArray(raw.reasons) ||
-      !raw.reasons.every(
-        (value: unknown) => typeof value === "string"
-      ))
+    Date.parse(raw.reference.entryTime) >=
+    Date.parse(raw.reference.expirationTime)
+  ) {
+    throw new Error(
+      "O vencimento deve ser posterior à entrada."
+    );
+  }
+
+  if (
+    !Array.isArray(raw.reasons) ||
+    !raw.reasons.every(
+      (reason: unknown) => typeof reason === "string"
+    )
   ) {
     throw new Error("Motivos da análise inválidos.");
   }
@@ -150,20 +152,25 @@ export function parseAnalysis(raw: unknown): Analysis {
 
 export async function getAnalysis(
   symbol: string,
+  timeframe: Timeframe,
   signal: AbortSignal
 ): Promise<Result> {
   if (!/^[A-Z0-9]+-OTC$/.test(symbol)) {
     throw new Error("Símbolo inválido.");
   }
 
+  if (timeframe !== "1m" && timeframe !== "5m") {
+    throw new Error("Timeframe inválido.");
+  }
+
   const params = new URLSearchParams({
     symbol,
-    timeframe: "1m",
+    timeframe,
     limit: "120",
   });
 
   const url =
-    `${BASE_URL}/api/v1/iq-option/demo/market-analysis?${params}`;
+    `${BASE_URL}/api/v1/iq-option/demo/market-analysis?${params.toString()}`;
 
   let response: Response;
 
@@ -177,16 +184,18 @@ export async function getAnalysis(
       },
     });
   } catch (error) {
-    if (signal.aborted) throw error;
+    if (signal.aborted) {
+      throw error;
+    }
 
     throw new Error(
-      `Não foi possível consultar ${symbol}. Verifique o backend e o CORS.`
+      `Não foi possível consultar ${symbol} (${timeframe}). Verifique o backend, a rede e o CORS.`
     );
   }
 
   if (!response.ok) {
     throw new Error(
-      `Falha na análise de ${symbol}: HTTP ${response.status}.`
+      `Falha na análise de ${symbol} (${timeframe}): HTTP ${response.status}.`
     );
   }
 
@@ -200,17 +209,24 @@ export async function getAnalysis(
 
   const analysis = parseAnalysis(raw);
 
-  if (analysis.symbol !== symbol) {
+  if (
+    analysis.symbol !== symbol ||
+    analysis.timeframe !== timeframe
+  ) {
     throw new Error(
-      `Resposta incompatível: esperado ${symbol}, recebido ${analysis.symbol}.`
+      `Resposta incompatível com ${symbol} (${timeframe}).`
     );
   }
 
   return { analysis, raw };
 }
 
-export function timeUTC(value?: string | null): string {
-  if (!value || !validDate(value)) return "—";
+export function timeUTC(
+  value?: string | null
+): string {
+  if (!value || !validDate(value)) {
+    return "—";
+  }
 
   return (
     new Intl.DateTimeFormat("pt-BR", {
@@ -222,6 +238,7 @@ export function timeUTC(value?: string | null): string {
       minute: "2-digit",
       second: "2-digit",
       hour12: false,
+      hourCycle: "h23",
     }).format(new Date(value)) + " UTC"
   );
 }
@@ -230,12 +247,70 @@ export function number(
   value?: number | null,
   digits = 6
 ): string {
-  return typeof value === "number" &&
+  return (
+    typeof value === "number" &&
     Number.isFinite(value)
+  )
     ? value.toLocaleString("pt-BR", {
         maximumFractionDigits: digits,
       })
     : "Indisponível";
+}
+
+export type ReferencePhase =
+  | "before"
+  | "during"
+  | "expired"
+  | "wait"
+  | "invalid";
+
+export function getReferencePhase(
+  analysis: Analysis,
+  now: number
+): ReferencePhase {
+  if (analysis.action === "WAIT") {
+    return "wait";
+  }
+
+  const entry = Date.parse(analysis.reference.entryTime);
+  const expiration = Date.parse(
+    analysis.reference.expirationTime
+  );
+
+  if (
+    !Number.isFinite(entry) ||
+    !Number.isFinite(expiration) ||
+    expiration <= entry
+  ) {
+    return "invalid";
+  }
+
+  if (now < entry) {
+    return "before";
+  }
+
+  if (now < expiration) {
+    return "during";
+  }
+
+  return "expired";
+}
+
+export function getReferenceMessage(
+  phase: ReferencePhase
+): string {
+  switch (phase) {
+    case "before":
+      return "Aguardando abertura da vela de referência";
+    case "during":
+      return "Janela de referência em andamento";
+    case "expired":
+      return "Sinal expirado";
+    case "wait":
+      return "Aguardar confirmação";
+    default:
+      return "Horários de referência inválidos";
+  }
 }
 
 export function isStale(
@@ -243,58 +318,40 @@ export function isStale(
   now: number
 ): { stale: boolean; reason: string } {
   const analysisTime = Date.parse(analysis.analysisAt);
+  const closeTime = Date.parse(
+    analysis.lastClosedCandle.closeTime
+  );
 
-  const closeTime = analysis.lastClosedCandle?.closeTime
-    ? Date.parse(analysis.lastClosedCandle.closeTime)
-    : NaN;
-
-  const expiration = analysis.reference?.expirationTime
-    ? Date.parse(analysis.reference.expirationTime)
-    : NaN;
-
-  const entry = analysis.reference?.entryTime
-    ? Date.parse(analysis.reference.entryTime)
-    : NaN;
-
-  if (
-    Number.isFinite(expiration) &&
-    now >= expiration
-  ) {
-    return { stale: true, reason: "Sinal expirado" };
-  }
-
-  if (
-    analysis.action !== "WAIT" &&
-    Number.isFinite(entry) &&
-    now >= entry
-  ) {
+  if (analysisTime > now + 60_000) {
     return {
       stale: true,
-      reason: "Horário de entrada já passou",
+      reason: "Horário da análise inconsistente",
     };
   }
 
-  if (now - analysisTime > 120000) {
+  if (closeTime > now + 60_000) {
+    return {
+      stale: true,
+      reason: "Horário da vela inconsistente",
+    };
+  }
+
+  const timeframeMs =
+    analysis.timeframe === "5m" ? 300_000 : 60_000;
+
+  const maximumAgeMs = timeframeMs * 2;
+
+  if (now - analysisTime > maximumAgeMs) {
     return {
       stale: true,
       reason: "Análise desatualizada",
     };
   }
 
-  if (
-    Number.isFinite(closeTime) &&
-    now - closeTime > 120000
-  ) {
+  if (now - closeTime > maximumAgeMs) {
     return {
       stale: true,
       reason: "Candle desatualizado",
-    };
-  }
-
-  if (analysisTime > now + 60000) {
-    return {
-      stale: true,
-      reason: "Horário da análise inconsistente",
     };
   }
 
