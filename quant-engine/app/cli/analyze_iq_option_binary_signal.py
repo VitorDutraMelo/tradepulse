@@ -1,14 +1,24 @@
-import argparse
+﻿import argparse
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from pathlib import Path
 
 from app.domain.iq_option_binary_signal import IqOptionBinarySignal
+from app.domain.trade_signal import TradeAction
 from app.providers.iq_option_market_data_provider import (
     IqOptionMarketDataProvider,
 )
+from app.repositories.iq_option_demo_binary_signal_repository import (
+    IqOptionDemoBinarySignalRepository,
+)
 from app.strategies.iq_option_trend_strategy import IqOptionTrendStrategy
+
+DEFAULT_BINARY_SIGNAL_DIRECTORY = (
+    Path(__file__).resolve().parents[2]
+    / "data/iq-option-demo-binary-signals"
+)
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -18,9 +28,13 @@ class JsonArgumentParser(argparse.ArgumentParser):
         raise ValueError(message)
 
 
-def signal_to_payload(signal: IqOptionBinarySignal) -> dict[str, object]:
+def signal_to_payload(
+    signal: IqOptionBinarySignal,
+    tracking: dict[str, object] | None = None,
+) -> dict[str, object]:
     """Convert the read-only IQ Option binary reference into JSON."""
-    return {
+
+    payload: dict[str, object] = {
         "symbol": signal.symbol,
         "timeframe": signal.timeframe,
         "source": signal.source,
@@ -63,9 +77,15 @@ def signal_to_payload(signal: IqOptionBinarySignal) -> dict[str, object]:
         "reasons": list(signal.reasons),
         "disclaimer": (
             "Technical reference only. No IQ Option order was sent. "
-            "CALL, PUT and WAIT are not profit guarantees or probabilities."
+            "CALL, PUT and WAIT are not profit guarantees or probabilities. "
+            "WIN, LOSS and DRAW are technical candle comparisons only."
         ),
     }
+
+    if tracking is not None:
+        payload["tracking"] = tracking
+
+    return payload
 
 
 def analyze_iq_option_binary_signal(
@@ -73,30 +93,100 @@ def analyze_iq_option_binary_signal(
     timeframe: str,
     limit: int,
     max_candle_age_seconds: int,
+    provider: IqOptionMarketDataProvider | None = None,
+    analysis_repository: IqOptionDemoBinarySignalRepository | None = None,
+    now: Callable[[], datetime] | None = None,
+    strategy: IqOptionTrendStrategy | None = None,
 ) -> dict[str, object]:
-    """Analyze closed IQ Option DEMO candles without executing an order."""
-    provider = IqOptionMarketDataProvider()
-    candles = provider.get_candles(
-        symbol=symbol,
-        timeframe=timeframe,
-        limit=limit,
+    """Analyze DEMO candles and track technical CALL/PUT references.
+
+    No IQ Option order is ever sent. Pending references are checked on every
+    analysis for the same symbol/timeframe, including when the new result is
+    WAIT. If local tracking has a problem, market analysis remains available.
+    """
+
+    resolved_provider = provider or IqOptionMarketDataProvider()
+    analysis_at = (now or (lambda: datetime.now(tz=UTC)))()
+
+    if analysis_at.tzinfo is None or analysis_at.utcoffset() is None:
+        raise ValueError("analysis clock must return a timezone-aware datetime")
+
+    analysis_at = analysis_at.astimezone(UTC)
+
+    candles = tuple(
+        resolved_provider.get_candles(
+            symbol=symbol,
+            timeframe=timeframe,
+            limit=limit,
+        )
     )
-    strategy = IqOptionTrendStrategy(
+
+    resolved_strategy = strategy or IqOptionTrendStrategy(
         max_candle_age_seconds=max_candle_age_seconds,
     )
-    signal = strategy.analyze(
+
+    signal = resolved_strategy.analyze(
         symbol=symbol,
         timeframe=timeframe,
         candles=candles,
-        source=provider.source,
-        analysis_at=datetime.now(tz=UTC),
+        source=resolved_provider.source,
+        analysis_at=analysis_at,
     )
 
-    return signal_to_payload(signal)
+    resolved_repository = analysis_repository or IqOptionDemoBinarySignalRepository(
+        DEFAULT_BINARY_SIGNAL_DIRECTORY
+    )
+
+    try:
+        resolved_repository.settle_due_references(
+            symbol=signal.symbol,
+            timeframe=signal.timeframe,
+            candles=candles,
+            settled_at=analysis_at,
+        )
+    except (OSError, ValueError):
+        if signal.action is not TradeAction.WAIT:
+            return signal_to_payload(
+                signal,
+                {
+                    "recordId": None,
+                    "status": "UNAVAILABLE",
+                    "settledAt": None,
+                    "settlementPrice": None,
+                },
+            )
+
+    if signal.action is TradeAction.WAIT:
+        return signal_to_payload(
+            signal,
+            {
+                "recordId": None,
+                "status": "NOT_APPLICABLE",
+                "settledAt": None,
+                "settlementPrice": None,
+            },
+        )
+
+    try:
+        record_path = resolved_repository.save_pending(
+            signal=signal,
+            recorded_at=analysis_at,
+        )
+        tracking = resolved_repository.get_tracking(record_path.stem)
+    except (OSError, ValueError):
+        tracking = {
+            "recordId": None,
+            "status": "UNAVAILABLE",
+            "settledAt": None,
+            "settlementPrice": None,
+        }
+
+    return signal_to_payload(signal, tracking)
 
 
 def error_to_payload(error: Exception) -> dict[str, object]:
     """Convert expected failures to JSON written on stderr."""
+
     if isinstance(error, PermissionError):
         code = "IQ_OPTION_ACCESS_DENIED"
     elif isinstance(error, ConnectionError):
@@ -114,6 +204,7 @@ def error_to_payload(error: Exception) -> dict[str, object]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run a read-only IQ Option DEMO binary technical analysis."""
+
     parser = JsonArgumentParser(
         description="Analyze IQ Option DEMO candles without sending an order.",
     )

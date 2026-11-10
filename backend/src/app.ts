@@ -1,10 +1,11 @@
-import cors from "cors";
+﻿import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 
 import { env } from "./config/env";
 import { createIqOptionDemoAnalysisRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis.router";
 import { createIqOptionDemoAnalysisHistoryRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis-history.router";
+import { createIqOptionDemoBinarySignalHistoryRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-binary-signal-history.router";
 import { CachedIqOptionDemoAnalysisClient } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis-cache";
 import { createIqOptionSignalRouter } from "./modules/iq-option-signals/iq-option-signal.router";
 import { createMarketAnalysisRouter } from "./modules/market-analysis/market-analysis.router";
@@ -12,6 +13,7 @@ import {
   PythonQuantEngineClient,
   type QuantEngineClient,
   type QuantEngineIqOptionDemoAnalysisClient,
+  type QuantEngineIqOptionDemoBinarySignalHistoryClient,
   type QuantEngineIqOptionDemoHistoryClient,
   type QuantEngineIqOptionSignalClient,
   type QuantEngineMarketDataClient,
@@ -22,6 +24,7 @@ type AppDependencies = {
   quantEngineClient?: QuantEngineClient;
   quantEngineIqOptionDemoAnalysisClient?: QuantEngineIqOptionDemoAnalysisClient;
   quantEngineIqOptionDemoHistoryClient?: QuantEngineIqOptionDemoHistoryClient;
+  quantEngineIqOptionDemoBinarySignalHistoryClient?: QuantEngineIqOptionDemoBinarySignalHistoryClient;
   quantEngineIqOptionSignalClient?: QuantEngineIqOptionSignalClient;
   quantEngineMarketDataClient?: QuantEngineMarketDataClient;
 };
@@ -55,6 +58,10 @@ export function createApp(dependencies: AppDependencies = {}) {
 
   const quantEngineIqOptionDemoHistoryClient =
     dependencies.quantEngineIqOptionDemoHistoryClient ??
+    defaultQuantEngineClient;
+
+  const quantEngineIqOptionDemoBinarySignalHistoryClient =
+    dependencies.quantEngineIqOptionDemoBinarySignalHistoryClient ??
     defaultQuantEngineClient;
 
   app.use(helmet());
@@ -100,6 +107,13 @@ export function createApp(dependencies: AppDependencies = {}) {
     "/api/v1/iq-option/demo/analyses",
     createIqOptionDemoAnalysisHistoryRouter(
       quantEngineIqOptionDemoHistoryClient,
+    ),
+  );
+
+  app.use(
+    "/api/v1/iq-option/demo/binary-signals",
+    createIqOptionDemoBinarySignalHistoryRouter(
+      quantEngineIqOptionDemoBinarySignalHistoryClient,
     ),
   );
 
