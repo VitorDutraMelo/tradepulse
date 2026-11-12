@@ -8,6 +8,9 @@ from app.domain.candle import Candle
 
 
 class FakeIqOptionMarketDataProvider:
+    source = "iq_option_demo"
+    venue = "iq"
+
     def __init__(self, candles: tuple[Candle, ...]) -> None:
         self.candles = candles
         self.requests: list[tuple[str, str, int]] = []
@@ -24,7 +27,7 @@ class FakeIqOptionMarketDataProvider:
 
 def create_candle() -> Candle:
     return Candle(
-        timestamp=datetime(2026, 11, 7, 1, 3, tzinfo=UTC),
+        timestamp=datetime(2026, 11, 12, 16, 20, tzinfo=UTC),
         open=1.0810,
         high=1.0815,
         low=1.0805,
@@ -33,15 +36,11 @@ def create_candle() -> Candle:
     )
 
 
-def test_converts_closed_candle_to_comparison_payload() -> None:
-    payload = get_iq_option_demo_candles.candle_to_payload(
-        candle=create_candle(),
-        timeframe="1m",
-    )
-
-    assert payload == {
-        "openTimestamp": "2026-11-07T01:03:00+00:00",
-        "closeTimestamp": "2026-11-07T01:04:00+00:00",
+def test_converts_closed_candle_to_chart_payload() -> None:
+    assert get_iq_option_demo_candles.candle_to_payload(
+        create_candle(),
+    ) == {
+        "timestamp": "2026-11-12T16:20:00+00:00",
         "open": 1.0810,
         "high": 1.0815,
         "low": 1.0805,
@@ -51,25 +50,24 @@ def test_converts_closed_candle_to_comparison_payload() -> None:
     }
 
 
-def test_returns_normalized_iq_option_demo_candles() -> None:
+def test_returns_real_iq_option_practice_candles_for_a_supported_asset() -> None:
     provider = FakeIqOptionMarketDataProvider((create_candle(),))
 
     payload = get_iq_option_demo_candles.get_iq_option_demo_candles(
-        symbol="EUR/USD-OTC",
+        symbol="GBP/USD-OTC",
         timeframe="1m",
-        limit=5,
+        limit=100,
         provider=provider,
     )
 
-    assert payload["symbol"] == "EURUSD-OTC"
+    assert payload["symbol"] == "GBPUSD-OTC"
     assert payload["timeframe"] == "1m"
     assert payload["source"] == "iq_option_demo"
     assert payload["venue"] == "iq"
     assert payload["accountMode"] == "PRACTICE"
     assert payload["candles"] == [
         {
-            "openTimestamp": "2026-11-07T01:03:00+00:00",
-            "closeTimestamp": "2026-11-07T01:04:00+00:00",
+            "timestamp": "2026-11-12T16:20:00+00:00",
             "open": 1.0810,
             "high": 1.0815,
             "low": 1.0805,
@@ -78,7 +76,34 @@ def test_returns_normalized_iq_option_demo_candles() -> None:
             "closed": True,
         }
     ]
-    assert provider.requests == [("EURUSD-OTC", "1m", 5)]
+    assert provider.requests == [("GBPUSD-OTC", "1m", 100)]
+
+
+def test_rejects_a_supported_asset_when_iq_option_returns_no_closed_candles() -> None:
+    provider = FakeIqOptionMarketDataProvider(())
+
+    with pytest.raises(
+        LookupError,
+        match="IQ Option returned no closed candles for GBPUSD-OTC",
+    ):
+        get_iq_option_demo_candles.get_iq_option_demo_candles(
+            symbol="GBPUSD-OTC",
+            timeframe="1m",
+            limit=100,
+            provider=provider,
+        )
+
+
+def test_rejects_an_asset_outside_the_otc_allowlist() -> None:
+    provider = FakeIqOptionMarketDataProvider((create_candle(),))
+
+    with pytest.raises(ValueError, match="unsupported IQ Option OTC symbol"):
+        get_iq_option_demo_candles.get_iq_option_demo_candles(
+            symbol="BTC-USD",
+            timeframe="1m",
+            limit=100,
+            provider=provider,
+        )
 
 
 def test_writes_candles_json_to_stdout(
@@ -86,11 +111,11 @@ def test_writes_candles_json_to_stdout(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     expected_payload = {
-        "symbol": "EURUSD",
-        "timeframe": "1m",
         "source": "iq_option_demo",
         "venue": "iq",
         "accountMode": "PRACTICE",
+        "symbol": "EURUSD-OTC",
+        "timeframe": "1m",
         "candles": [],
     }
 
@@ -103,7 +128,7 @@ def test_writes_candles_json_to_stdout(
     exit_code = get_iq_option_demo_candles.main(
         [
             "--symbol",
-            "EURUSD",
+            "EURUSD-OTC",
             "--timeframe",
             "1m",
         ]
@@ -138,7 +163,7 @@ def test_writes_iq_option_error_to_stderr(
     exit_code = get_iq_option_demo_candles.main(
         [
             "--symbol",
-            "EURUSD",
+            "EURUSD-OTC",
             "--timeframe",
             "1m",
         ]

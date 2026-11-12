@@ -1,4 +1,4 @@
-﻿import cors from "cors";
+import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 
@@ -7,6 +7,7 @@ import { createIqOptionDemoAnalysisRouter } from "./modules/iq-option-demo-analy
 import { createIqOptionDemoAnalysisHistoryRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis-history.router";
 import { createIqOptionDemoBinarySignalHistoryRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-binary-signal-history.router";
 import { CachedIqOptionDemoAnalysisClient } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis-cache";
+import { createIqOptionDemoCandlesRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-candles.router";
 import { createIqOptionRealTradingRouter } from "./modules/iq-option-real-trading/iq-option-real-trading.router";
 import { IqOptionRealTradingSafetyPolicy } from "./modules/iq-option-real-trading/iq-option-real-trading.policy";
 import { createIqOptionSignalRouter } from "./modules/iq-option-signals/iq-option-signal.router";
@@ -15,6 +16,7 @@ import {
   PythonQuantEngineClient,
   type QuantEngineClient,
   type QuantEngineIqOptionDemoAnalysisClient,
+  type QuantEngineIqOptionDemoCandleClient,
   type QuantEngineIqOptionDemoBinarySignalHistoryClient,
   type QuantEngineIqOptionDemoHistoryClient,
   type QuantEngineIqOptionSignalClient,
@@ -25,6 +27,7 @@ import { createMarketDataRouter } from "./modules/market-data/market-data.router
 type AppDependencies = {
   quantEngineClient?: QuantEngineClient;
   quantEngineIqOptionDemoAnalysisClient?: QuantEngineIqOptionDemoAnalysisClient;
+  quantEngineIqOptionDemoCandleClient?: QuantEngineIqOptionDemoCandleClient;
   quantEngineIqOptionDemoHistoryClient?: QuantEngineIqOptionDemoHistoryClient;
   quantEngineIqOptionDemoBinarySignalHistoryClient?: QuantEngineIqOptionDemoBinarySignalHistoryClient;
   quantEngineIqOptionSignalClient?: QuantEngineIqOptionSignalClient;
@@ -49,6 +52,10 @@ export function createApp(dependencies: AppDependencies = {}) {
   const quantEngineIqOptionDemoAnalysisClient =
     dependencies.quantEngineIqOptionDemoAnalysisClient ??
     defaultIqOptionDemoAnalysisClient;
+
+  const quantEngineIqOptionDemoCandleClient =
+    dependencies.quantEngineIqOptionDemoCandleClient ??
+    defaultQuantEngineClient;
 
   const quantEngineIqOptionSignalClient =
     dependencies.quantEngineIqOptionSignalClient ??
@@ -111,6 +118,13 @@ export function createApp(dependencies: AppDependencies = {}) {
     "/api/v1/iq-option/demo/market-analysis",
     createIqOptionDemoAnalysisRouter(
       quantEngineIqOptionDemoAnalysisClient,
+    ),
+  );
+
+  app.use(
+    "/api/v1/iq-option/demo/candles",
+    createIqOptionDemoCandlesRouter(
+      quantEngineIqOptionDemoCandleClient,
     ),
   );
 

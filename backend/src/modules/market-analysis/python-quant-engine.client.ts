@@ -1,4 +1,4 @@
-﻿import { execFile } from "node:child_process";
+import { execFile } from "node:child_process";
 
 import {
   iqOptionDemoAnalysisHistoryResponseSchema,
@@ -32,6 +32,11 @@ import {
   type MarketCandlesResponse,
 } from "../market-data/market-data.schema";
 import {
+  iqOptionDemoCandlesResponseSchema,
+  type IqOptionDemoCandlesRequest,
+  type IqOptionDemoCandlesResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-candles.schema";
+import {
   marketAnalysisResponseSchema,
   type MarketAnalysisRequest,
   type MarketAnalysisResponse,
@@ -61,6 +66,12 @@ export interface QuantEngineClient {
 
 export interface QuantEngineMarketDataClient {
   getCandles(input: MarketCandlesRequest): Promise<MarketCandlesResponse>;
+}
+
+export interface QuantEngineIqOptionDemoCandleClient {
+  getIqOptionDemoCandles(
+    input: IqOptionDemoCandlesRequest,
+  ): Promise<IqOptionDemoCandlesResponse>;
 }
 
 export interface QuantEngineIqOptionSignalClient {
@@ -138,6 +149,7 @@ export class PythonQuantEngineClient
   implements
     QuantEngineClient,
     QuantEngineMarketDataClient,
+    QuantEngineIqOptionDemoCandleClient,
     QuantEngineIqOptionSignalClient,
     QuantEngineIqOptionDemoAnalysisClient,
     QuantEngineIqOptionDemoHistoryClient,
@@ -192,6 +204,32 @@ export class PythonQuantEngineClient
     if (!parsedPayload.success) {
       throw new QuantEngineClientError(
         "The Quant Engine returned an invalid market candles payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async getIqOptionDemoCandles(
+    input: IqOptionDemoCandlesRequest,
+  ): Promise<IqOptionDemoCandlesResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_candles",
+      "--symbol",
+      input.symbol,
+      "--timeframe",
+      input.timeframe,
+      "--limit",
+      String(input.limit),
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoCandlesResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option demo candles payload.",
       );
     }
 
