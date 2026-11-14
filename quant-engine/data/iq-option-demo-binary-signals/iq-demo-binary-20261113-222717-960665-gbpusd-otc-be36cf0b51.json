@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "recordId": "iq-demo-binary-20261113-222717-960665-gbpusd-otc-be36cf0b51",
+  "recordedAt": "2026-11-13T22:27:17.960665+00:00",
+  "source": "iq_option_demo",
+  "accountMode": "PRACTICE",
+  "analysis": {
+    "symbol": "GBPUSD-OTC",
+    "timeframe": "1m",
+    "analysisAt": "2026-11-13T22:27:17.960665+00:00",
+    "action": "CALL",
+    "reasons": [
+      "EMA 9 (1.351001) is above EMA 21 (1.350549).",
+      "RSI 14 (62.12) is inside the configured CALL momentum range.",
+      "ADX 14 (22.46) confirms the configured minimum trend strength."
+    ],
+    "reference": {
+      "price": 1.351375,
+      "entryTime": "2026-11-13T22:28:00+00:00",
+      "expirationTime": "2026-11-13T22:29:00+00:00"
+    }
+  },
+  "outcome": {
+    "status": "LOSS",
+    "settledAt": "2026-11-13T22:29:18.053723+00:00",
+    "settlementPrice": 1.351235
+  },
+  "disclaimer": "Technical reference only. No IQ Option order was sent. WIN, LOSS and DRAW are technical candle comparisons only, not broker settlement records."
+}

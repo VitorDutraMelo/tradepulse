@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "recordId": "iq-demo-binary-20261113-144338-600240-eurusd-otc-b95840de78",
+  "recordedAt": "2026-11-13T14:43:38.600240+00:00",
+  "source": "iq_option_demo",
+  "accountMode": "PRACTICE",
+  "analysis": {
+    "symbol": "EURUSD-OTC",
+    "timeframe": "1m",
+    "analysisAt": "2026-11-13T14:43:38.600240+00:00",
+    "action": "CALL",
+    "reasons": [
+      "EMA 9 (1.115270) is above EMA 21 (1.114920).",
+      "RSI 14 (52.48) is inside the configured CALL momentum range.",
+      "ADX 14 (29.26) confirms the configured minimum trend strength."
+    ],
+    "reference": {
+      "price": 1.115015,
+      "entryTime": "2026-11-13T14:44:00+00:00",
+      "expirationTime": "2026-11-13T14:45:00+00:00"
+    }
+  },
+  "outcome": {
+    "status": "WIN",
+    "settledAt": "2026-11-13T14:45:38.609283+00:00",
+    "settlementPrice": 1.115415
+  },
+  "disclaimer": "Technical reference only. No IQ Option order was sent. WIN, LOSS and DRAW are technical candle comparisons only, not broker settlement records."
+}

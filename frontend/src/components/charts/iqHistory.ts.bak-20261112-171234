@@ -1,0 +1,199 @@
+﻿export type IqCandle = {
+  timestamp: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  closed: true;
+};
+
+type HistorySummary = {
+  recordId: string;
+  symbol: string;
+  timeframe: string;
+  source: string;
+  venue: string;
+  accountMode: string;
+  recordedAt: string;
+};
+
+type HistoryList = {
+  data: {
+    source: string;
+    venue: string;
+    accountMode: string;
+    records: HistorySummary[];
+  };
+};
+
+type HistoryDetail = {
+  data: {
+    source: string;
+    venue: string;
+    accountMode: string;
+    analysis: {
+      symbol: string;
+      timeframe: string;
+    };
+    candles: IqCandle[];
+  };
+};
+
+const BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://localhost:3001"
+).replace(/\/+$/, "");
+
+const HISTORY_URL =
+  `${BASE_URL}/api/v1/iq-option/demo/analyses`;
+
+let queue: Promise<unknown> = Promise.resolve();
+
+function serial<T>(operation: () => Promise<T>): Promise<T> {
+  const next = queue.then(operation, operation);
+  queue = next.then(
+    () => undefined,
+    () => undefined
+  );
+  return next;
+}
+
+async function requestJson<T>(
+  url: string,
+  signal?: AbortSignal
+): Promise<T> {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    cache: "no-store",
+    signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Historico IQ: HTTP ${response.status}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+function validCandle(value: IqCandle): boolean {
+  if (
+    !value ||
+    value.closed !== true ||
+    !Number.isFinite(Date.parse(value.timestamp))
+  ) {
+    return false;
+  }
+
+  const prices = [
+    value.open,
+    value.high,
+    value.low,
+    value.close,
+  ];
+
+  if (!prices.every(
+    price => Number.isFinite(price) && price > 0
+  )) {
+    return false;
+  }
+
+  if (
+    !Number.isFinite(value.volume) ||
+    value.volume < 0
+  ) {
+    return false;
+  }
+
+  return (
+    value.high >= Math.max(value.open, value.close) &&
+    value.low <= Math.min(value.open, value.close)
+  );
+}
+
+export async function getIqHistoricalCandles(
+  symbol: string,
+  timeframe: string,
+  signal?: AbortSignal
+): Promise<IqCandle[]> {
+  return serial(async () => {
+    if (signal?.aborted) {
+      throw new DOMException("Cancelado", "AbortError");
+    }
+
+    const list = await requestJson<HistoryList>(
+      `${HISTORY_URL}?limit=100`,
+      signal
+    );
+
+    const data = list.data;
+
+    if (
+      data?.source !== "iq_option_demo" ||
+      data?.venue !== "iq" ||
+      data?.accountMode !== "PRACTICE" ||
+      !Array.isArray(data.records)
+    ) {
+      throw new Error("Fonte historica nao validada.");
+    }
+
+    const matches = data.records
+      .filter(record =>
+        record.source === "iq_option_demo" &&
+        record.venue === "iq" &&
+        record.accountMode === "PRACTICE" &&
+        record.symbol === symbol &&
+        record.timeframe === timeframe &&
+        Number.isFinite(Date.parse(record.recordedAt)) &&
+        /^iq-demo-\d{8}-\d{6}-\d{6}-[a-z0-9-]+-[a-f0-9]{10}$/
+          .test(record.recordId)
+      )
+      .sort(
+        (a, b) =>
+          Date.parse(b.recordedAt) -
+          Date.parse(a.recordedAt)
+      );
+
+    if (matches.length === 0) {
+      return [];
+    }
+
+    const detail = await requestJson<HistoryDetail>(
+      `${HISTORY_URL}/${encodeURIComponent(matches[0].recordId)}`,
+      signal
+    );
+
+    const record = detail.data;
+
+    if (
+      record?.source !== "iq_option_demo" ||
+      record?.venue !== "iq" ||
+      record?.accountMode !== "PRACTICE" ||
+      record.analysis?.symbol !== symbol ||
+      record.analysis?.timeframe !== timeframe ||
+      !Array.isArray(record.candles)
+    ) {
+      throw new Error("Registro historico incompatível.");
+    }
+
+    if (!record.candles.every(validCandle)) {
+      throw new Error("Candles historicos invalidos.");
+    }
+
+    const ordered = [...record.candles]
+      .sort(
+        (a, b) =>
+          Date.parse(a.timestamp) -
+          Date.parse(b.timestamp)
+      );
+
+    const timestamps = ordered.map(c => c.timestamp);
+
+    if (new Set(timestamps).size !== timestamps.length) {
+      throw new Error("Candles duplicados no historico.");
+    }
+
+    return ordered.slice(-60);
+  });
+}
