@@ -37,6 +37,11 @@ import {
   type IqOptionDemoCandlesResponse,
 } from "../iq-option-demo-analysis/iq-option-demo-candles.schema";
 import {
+  iqOptionDemoM5SyncResponseSchema,
+  type IqOptionDemoM5SyncRequest,
+  type IqOptionDemoM5SyncResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-m5-sync.schema";
+import {
   marketAnalysisResponseSchema,
   type MarketAnalysisRequest,
   type MarketAnalysisResponse,
@@ -74,6 +79,11 @@ export interface QuantEngineIqOptionDemoCandleClient {
   ): Promise<IqOptionDemoCandlesResponse>;
 }
 
+export interface QuantEngineIqOptionDemoM5SyncClient {
+  getIqOptionDemoM5Sync(
+    input: IqOptionDemoM5SyncRequest,
+  ): Promise<IqOptionDemoM5SyncResponse>;
+}
 export interface QuantEngineIqOptionSignalClient {
   prepareIqOptionSignal(
     input: IqOptionSignalRequest,
@@ -150,6 +160,7 @@ export class PythonQuantEngineClient
     QuantEngineClient,
     QuantEngineMarketDataClient,
     QuantEngineIqOptionDemoCandleClient,
+    QuantEngineIqOptionDemoM5SyncClient,
     QuantEngineIqOptionSignalClient,
     QuantEngineIqOptionDemoAnalysisClient,
     QuantEngineIqOptionDemoHistoryClient,
@@ -236,6 +247,27 @@ export class PythonQuantEngineClient
     return parsedPayload.data;
   }
 
+  async getIqOptionDemoM5Sync(
+    input: IqOptionDemoM5SyncRequest,
+  ): Promise<IqOptionDemoM5SyncResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_m5_sync",
+      "--symbol",
+      input.symbol,
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoM5SyncResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option DEMO M5 synchronization payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
   async prepareIqOptionSignal(
     input: IqOptionSignalRequest,
   ): Promise<IqOptionSignalResponse> {
