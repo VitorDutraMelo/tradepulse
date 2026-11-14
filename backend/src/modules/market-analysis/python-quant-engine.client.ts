@@ -42,6 +42,11 @@ import {
   type IqOptionDemoM5SyncResponse,
 } from "../iq-option-demo-analysis/iq-option-demo-m5-sync.schema";
 import {
+  iqOptionDemoM5SignalResponseSchema,
+  type IqOptionDemoM5SignalRequest,
+  type IqOptionDemoM5SignalResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-m5-signal.schema";
+import {
   marketAnalysisResponseSchema,
   type MarketAnalysisRequest,
   type MarketAnalysisResponse,
@@ -83,6 +88,18 @@ export interface QuantEngineIqOptionDemoM5SyncClient {
   getIqOptionDemoM5Sync(
     input: IqOptionDemoM5SyncRequest,
   ): Promise<IqOptionDemoM5SyncResponse>;
+}
+
+export interface QuantEngineIqOptionDemoM5SignalClient {
+  getIqOptionDemoM5Signal(
+    input: IqOptionDemoM5SignalRequest,
+  ): Promise<IqOptionDemoM5SignalResponse>;
+}
+
+export interface QuantEngineIqOptionDemoM5SignalClient {
+  getIqOptionDemoM5Signal(
+    input: IqOptionDemoM5SignalRequest,
+  ): Promise<IqOptionDemoM5SignalResponse>;
 }
 export interface QuantEngineIqOptionSignalClient {
   prepareIqOptionSignal(
@@ -161,6 +178,7 @@ export class PythonQuantEngineClient
     QuantEngineMarketDataClient,
     QuantEngineIqOptionDemoCandleClient,
     QuantEngineIqOptionDemoM5SyncClient,
+    QuantEngineIqOptionDemoM5SignalClient,
     QuantEngineIqOptionSignalClient,
     QuantEngineIqOptionDemoAnalysisClient,
     QuantEngineIqOptionDemoHistoryClient,
@@ -263,6 +281,27 @@ export class PythonQuantEngineClient
     if (!parsedPayload.success) {
       throw new QuantEngineClientError(
         "The Quant Engine returned an invalid IQ Option DEMO M5 synchronization payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+  async getIqOptionDemoM5Signal(
+    input: IqOptionDemoM5SignalRequest,
+  ): Promise<IqOptionDemoM5SignalResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_m5_signal",
+      "--symbol",
+      input.symbol,
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoM5SignalResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option DEMO M5 signal payload.",
       );
     }
 
