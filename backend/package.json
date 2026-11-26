@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test:watch": "vitest src"
+    "test:watch": "vitest src",
+    "validate:live": "tsx scripts/validate-live.ts"
   },
   "keywords": [],
   "author": "",

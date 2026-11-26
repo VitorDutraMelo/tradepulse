@@ -1,3 +1,9 @@
+/*
+ * ISOLATED — NOT MOUNTED (blocks A.1/A.2, docs/SECURITY.md).
+ * TradePulse never executes orders and only reads PRACTICE data. This module
+ * is not wired into the API and must not be mounted without an explicit,
+ * documented approval by the project owner (pending decision N.2).
+ */
 import { Router } from "express";
 
 import {
