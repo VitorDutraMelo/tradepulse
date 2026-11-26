@@ -128,9 +128,11 @@ export default function CandlestickChart({
 
     void load();
 
+    // Candles are served from the backend candle cache (one IQ read per
+    // closed candle), so a short refresh shows a new close within seconds.
     const interval = window.setInterval(
       () => void load(),
-      60_000
+      10_000
     );
 
     return () => {
