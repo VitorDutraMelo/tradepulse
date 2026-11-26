@@ -2,19 +2,24 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
-from datetime import timedelta
 
 from app.domain.candle import Candle
 from app.providers.iq_option_market_data_provider import (
     IqOptionMarketDataProvider,
 )
 
-TIMEFRAME_SECONDS = {
-    "1m": 60,
-    "5m": 300,
-    "15m": 900,
-    "1h": 3600,
-}
+SUPPORTED_OTC_SYMBOLS = (
+    "EURUSD-OTC",
+    "GBPUSD-OTC",
+    "USDJPY-OTC",
+    "EURJPY-OTC",
+    "EURGBP-OTC",
+    "AUDUSD-OTC",
+    "USDCAD-OTC",
+    "AUDCAD-OTC",
+)
+
+SUPPORTED_TIMEFRAMES = ("1m",)
 
 
 class JsonArgumentParser(argparse.ArgumentParser):
@@ -24,26 +29,11 @@ class JsonArgumentParser(argparse.ArgumentParser):
         raise ValueError(message)
 
 
-def candle_to_payload(
-    candle: Candle,
-    timeframe: str,
-) -> dict[str, object]:
-    """Convert one validated closed IQ Option candle into terminal JSON."""
-
-    interval_seconds = TIMEFRAME_SECONDS.get(timeframe)
-
-    if interval_seconds is None:
-        supported_timeframes = ", ".join(TIMEFRAME_SECONDS)
-        raise ValueError(
-            "unsupported IQ Option timeframe; supported values are: "
-            f"{supported_timeframes}"
-        )
+def candle_to_payload(candle: Candle) -> dict[str, object]:
+    """Convert one validated closed IQ Option candle into API JSON."""
 
     return {
-        "openTimestamp": candle.timestamp.isoformat(),
-        "closeTimestamp": (
-            candle.timestamp + timedelta(seconds=interval_seconds)
-        ).isoformat(),
+        "timestamp": candle.timestamp.isoformat(),
         "open": candle.open,
         "high": candle.high,
         "low": candle.low,
@@ -53,15 +43,36 @@ def candle_to_payload(
     }
 
 
+def normalize_symbol(symbol: str) -> str:
+    """Normalize a user symbol while preserving the OTC suffix."""
+
+    return symbol.strip().upper().replace("/", "")
+
+
 def get_iq_option_demo_candles(
     symbol: str,
     timeframe: str,
     limit: int,
     provider: IqOptionMarketDataProvider | None = None,
 ) -> dict[str, object]:
-    """Return validated closed IQ Option DEMO candles for chart comparison."""
+    """Return real closed IQ Option PRACTICE candles for one approved OTC asset."""
 
-    normalized_symbol = symbol.strip().upper().replace("/", "")
+    normalized_symbol = normalize_symbol(symbol)
+
+    if normalized_symbol not in SUPPORTED_OTC_SYMBOLS:
+        supported_symbols = ", ".join(SUPPORTED_OTC_SYMBOLS)
+        raise ValueError(
+            "unsupported IQ Option OTC symbol; supported values are: "
+            f"{supported_symbols}"
+        )
+
+    if timeframe not in SUPPORTED_TIMEFRAMES:
+        supported_timeframes = ", ".join(SUPPORTED_TIMEFRAMES)
+        raise ValueError(
+            "unsupported IQ Option timeframe; supported values are: "
+            f"{supported_timeframes}"
+        )
+
     resolved_provider = provider or IqOptionMarketDataProvider()
     candles = resolved_provider.get_candles(
         symbol=normalized_symbol,
@@ -69,19 +80,19 @@ def get_iq_option_demo_candles(
         limit=limit,
     )
 
+    if not candles:
+        raise LookupError(
+            f"IQ Option returned no closed candles for {normalized_symbol} "
+            "on PRACTICE"
+        )
+
     return {
-        "symbol": normalized_symbol,
-        "timeframe": timeframe,
         "source": IqOptionMarketDataProvider.source,
         "venue": IqOptionMarketDataProvider.venue,
         "accountMode": "PRACTICE",
-        "candles": [
-            candle_to_payload(
-                candle=candle,
-                timeframe=timeframe,
-            )
-            for candle in candles
-        ],
+        "symbol": normalized_symbol,
+        "timeframe": timeframe,
+        "candles": [candle_to_payload(candle) for candle in candles],
     }
 
 
@@ -108,16 +119,16 @@ def error_to_payload(error: Exception) -> dict[str, object]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    """Print validated closed IQ Option DEMO candles as readable JSON."""
+    """Print real closed IQ Option PRACTICE candles as JSON."""
 
     parser = JsonArgumentParser(
         description=(
-            "Retrieve validated closed IQ Option DEMO candles for comparison."
+            "Retrieve validated closed IQ Option PRACTICE candles for charts."
         ),
     )
     parser.add_argument("--symbol", required=True)
     parser.add_argument("--timeframe", required=True)
-    parser.add_argument("--limit", type=int, default=5)
+    parser.add_argument("--limit", type=int, default=100)
 
     try:
         arguments = parser.parse_args(argv)

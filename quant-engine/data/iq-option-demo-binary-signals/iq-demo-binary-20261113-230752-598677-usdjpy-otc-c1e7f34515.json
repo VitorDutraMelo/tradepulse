@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "recordId": "iq-demo-binary-20261113-230752-598677-usdjpy-otc-c1e7f34515",
+  "recordedAt": "2026-11-13T23:07:52.598677+00:00",
+  "source": "iq_option_demo",
+  "accountMode": "PRACTICE",
+  "analysis": {
+    "symbol": "USDJPY-OTC",
+    "timeframe": "1m",
+    "analysisAt": "2026-11-13T23:07:52.598677+00:00",
+    "action": "PUT",
+    "reasons": [
+      "EMA 9 (160.863401) is below EMA 21 (160.907964).",
+      "RSI 14 (33.10) is inside the configured PUT momentum range.",
+      "ADX 14 (38.62) confirms the configured minimum trend strength."
+    ],
+    "reference": {
+      "price": 160.82975,
+      "entryTime": "2026-11-13T23:08:00+00:00",
+      "expirationTime": "2026-11-13T23:09:00+00:00"
+    }
+  },
+  "outcome": {
+    "status": "WIN",
+    "settledAt": "2026-11-13T23:09:17.770918+00:00",
+    "settlementPrice": 160.81045
+  },
+  "disclaimer": "Technical reference only. No IQ Option order was sent. WIN, LOSS and DRAW are technical candle comparisons only, not broker settlement records."
+}

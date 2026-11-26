@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "recordId": "iq-demo-binary-20261113-150938-556135-eurgbp-otc-2b5987afa3",
+  "recordedAt": "2026-11-13T15:09:38.556135+00:00",
+  "source": "iq_option_demo",
+  "accountMode": "PRACTICE",
+  "analysis": {
+    "symbol": "EURGBP-OTC",
+    "timeframe": "1m",
+    "analysisAt": "2026-11-13T15:09:38.556135+00:00",
+    "action": "CALL",
+    "reasons": [
+      "EMA 9 (0.843954) is above EMA 21 (0.843715).",
+      "RSI 14 (57.64) is inside the configured CALL momentum range.",
+      "ADX 14 (52.50) confirms the configured minimum trend strength."
+    ],
+    "reference": {
+      "price": 0.843855,
+      "entryTime": "2026-11-13T15:10:00+00:00",
+      "expirationTime": "2026-11-13T15:11:00+00:00"
+    }
+  },
+  "outcome": {
+    "status": "LOSS",
+    "settledAt": "2026-11-13T15:11:38.532527+00:00",
+    "settlementPrice": 0.843805
+  },
+  "disclaimer": "Technical reference only. No IQ Option order was sent. WIN, LOSS and DRAW are technical candle comparisons only, not broker settlement records."
+}

@@ -1,4 +1,4 @@
-﻿import { execFile } from "node:child_process";
+import { execFile } from "node:child_process";
 
 import {
   iqOptionDemoAnalysisHistoryResponseSchema,
@@ -32,6 +32,29 @@ import {
   type MarketCandlesResponse,
 } from "../market-data/market-data.schema";
 import {
+  iqOptionDemoCandlesResponseSchema,
+  type IqOptionDemoCandlesRequest,
+  type IqOptionDemoCandlesResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-candles.schema";
+import {
+  iqOptionDemoM5SyncResponseSchema,
+  type IqOptionDemoM5SyncRequest,
+  type IqOptionDemoM5SyncResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-m5-sync.schema";
+import {
+  iqOptionDemoM5SignalResponseSchema,
+  type IqOptionDemoM5SignalRequest,
+  type IqOptionDemoM5SignalResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-m5-signal.schema";
+import {
+  iqOptionDemoM5ValidationHistoryResponseSchema,
+  iqOptionDemoM5ValidationRecordResponseSchema,
+  type IqOptionDemoM5ValidationHistoryRequest,
+  type IqOptionDemoM5ValidationHistoryResponse,
+  type IqOptionDemoM5ValidationRecordRequest,
+  type IqOptionDemoM5ValidationRecordResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-m5-validation-history.schema";
+import {
   marketAnalysisResponseSchema,
   type MarketAnalysisRequest,
   type MarketAnalysisResponse,
@@ -63,6 +86,32 @@ export interface QuantEngineMarketDataClient {
   getCandles(input: MarketCandlesRequest): Promise<MarketCandlesResponse>;
 }
 
+export interface QuantEngineIqOptionDemoCandleClient {
+  getIqOptionDemoCandles(
+    input: IqOptionDemoCandlesRequest,
+  ): Promise<IqOptionDemoCandlesResponse>;
+}
+
+export interface QuantEngineIqOptionDemoM5SyncClient {
+  getIqOptionDemoM5Sync(
+    input: IqOptionDemoM5SyncRequest,
+  ): Promise<IqOptionDemoM5SyncResponse>;
+}
+
+export interface QuantEngineIqOptionDemoM5SignalClient {
+  getIqOptionDemoM5Signal(
+    input: IqOptionDemoM5SignalRequest,
+  ): Promise<IqOptionDemoM5SignalResponse>;
+}
+export interface QuantEngineIqOptionDemoM5ValidationHistoryClient {
+  listIqOptionDemoM5Validations(
+    input: IqOptionDemoM5ValidationHistoryRequest,
+  ): Promise<IqOptionDemoM5ValidationHistoryResponse>;
+
+  getIqOptionDemoM5ValidationRecord(
+    input: IqOptionDemoM5ValidationRecordRequest,
+  ): Promise<IqOptionDemoM5ValidationRecordResponse>;
+}
 export interface QuantEngineIqOptionSignalClient {
   prepareIqOptionSignal(
     input: IqOptionSignalRequest,
@@ -138,6 +187,10 @@ export class PythonQuantEngineClient
   implements
     QuantEngineClient,
     QuantEngineMarketDataClient,
+    QuantEngineIqOptionDemoCandleClient,
+    QuantEngineIqOptionDemoM5SyncClient,
+    QuantEngineIqOptionDemoM5SignalClient,
+    QuantEngineIqOptionDemoM5ValidationHistoryClient,
     QuantEngineIqOptionSignalClient,
     QuantEngineIqOptionDemoAnalysisClient,
     QuantEngineIqOptionDemoHistoryClient,
@@ -192,6 +245,123 @@ export class PythonQuantEngineClient
     if (!parsedPayload.success) {
       throw new QuantEngineClientError(
         "The Quant Engine returned an invalid market candles payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async getIqOptionDemoCandles(
+    input: IqOptionDemoCandlesRequest,
+  ): Promise<IqOptionDemoCandlesResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_candles",
+      "--symbol",
+      input.symbol,
+      "--timeframe",
+      input.timeframe,
+      "--limit",
+      String(input.limit),
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoCandlesResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option demo candles payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async getIqOptionDemoM5Sync(
+    input: IqOptionDemoM5SyncRequest,
+  ): Promise<IqOptionDemoM5SyncResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_m5_sync",
+      "--symbol",
+      input.symbol,
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoM5SyncResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option DEMO M5 synchronization payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+  async getIqOptionDemoM5Signal(
+    input: IqOptionDemoM5SignalRequest,
+  ): Promise<IqOptionDemoM5SignalResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_m5_signal_with_m15",
+      "--symbol",
+      input.symbol,
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoM5SignalResponseSchema.safeParse(rawPayload);
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option DEMO M5 signal payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async listIqOptionDemoM5Validations(
+    input: IqOptionDemoM5ValidationHistoryRequest,
+  ): Promise<IqOptionDemoM5ValidationHistoryResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_m5_validation_history",
+      "--limit",
+      String(input.limit),
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoM5ValidationHistoryResponseSchema.safeParse(
+        rawPayload,
+      );
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option DEMO M5 validation history payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async getIqOptionDemoM5ValidationRecord(
+    input: IqOptionDemoM5ValidationRecordRequest,
+  ): Promise<IqOptionDemoM5ValidationRecordResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_m5_validation_history",
+      "--record-id",
+      input.recordId,
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoM5ValidationRecordResponseSchema.safeParse(
+        rawPayload,
+      );
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option DEMO M5 validation record payload.",
       );
     }
 
