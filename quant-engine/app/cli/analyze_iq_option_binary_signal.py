@@ -92,7 +92,7 @@ def analyze_iq_option_binary_signal(
     symbol: str,
     timeframe: str,
     limit: int,
-    max_candle_age_seconds: int,
+    max_candle_age_seconds: int | None,
     provider: IqOptionMarketDataProvider | None = None,
     analysis_repository: IqOptionDemoBinarySignalRepository | None = None,
     now: Callable[[], datetime] | None = None,
@@ -214,7 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--max-candle-age-seconds",
         type=int,
-        default=120,
+        default=None,
     )
 
     try:

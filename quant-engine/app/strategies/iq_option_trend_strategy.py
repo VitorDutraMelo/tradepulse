@@ -31,7 +31,9 @@ class IqOptionTrendStrategy:
     call_rsi_maximum: float = 68.0
     put_rsi_minimum: float = 32.0
     put_rsi_maximum: float = 48.0
-    max_candle_age_seconds: int = 120
+    # None = one full timeframe (A.2). The former fixed 120 s limit applied to
+    # every timeframe and turned every M5 analysis into WAIT after 2 minutes.
+    max_candle_age_seconds: int | None = None
     expiry_candles: int = 1
 
     _timeframe_seconds = {
@@ -48,9 +50,11 @@ class IqOptionTrendStrategy:
             "rsi_period": self.rsi_period,
             "adx_period": self.adx_period,
             "atr_period": self.atr_period,
-            "max_candle_age_seconds": self.max_candle_age_seconds,
             "expiry_candles": self.expiry_candles,
         }
+
+        if self.max_candle_age_seconds is not None:
+            integer_values["max_candle_age_seconds"] = self.max_candle_age_seconds
 
         for name, value in integer_values.items():
             if isinstance(value, bool) or not isinstance(value, int):
@@ -126,10 +130,11 @@ class IqOptionTrendStrategy:
             0.0,
             (current_time - last_candle_close_time).total_seconds(),
         )
-        entry_time = self._next_reference_entry_time(
-            current_time,
-            timeframe_seconds,
-        )
+        # Provisional entry rule (A.2, ADR-0003): the theoretical entry is the
+        # opening of the candle that immediately follows the reference candle,
+        # i.e. the reference candle close. It is never the boundary after the
+        # analysis time, which previously skipped one whole candle.
+        entry_time = last_candle_close_time
         expiration_time = entry_time + timedelta(
             seconds=timeframe_seconds * self.expiry_candles
         )
@@ -176,7 +181,13 @@ class IqOptionTrendStrategy:
             "atr": atr,
         }
 
-        if candle_age_seconds > self.max_candle_age_seconds:
+        max_candle_age_seconds = (
+            self.max_candle_age_seconds
+            if self.max_candle_age_seconds is not None
+            else timeframe_seconds
+        )
+
+        if candle_age_seconds > max_candle_age_seconds:
             return self._wait(
                 symbol=symbol,
                 timeframe=normalized_timeframe,
@@ -186,7 +197,7 @@ class IqOptionTrendStrategy:
                 reasons=(
                     (
                         f"Latest closed candle is {candle_age_seconds:.0f}s old; "
-                        f"maximum allowed age is {self.max_candle_age_seconds}s."
+                        f"maximum allowed age is {max_candle_age_seconds}s."
                     ),
                 ),
             )
@@ -312,18 +323,6 @@ class IqOptionTrendStrategy:
             self.atr_period + 1,
             (self.adx_period * 2) + 1,
         )
-
-    @staticmethod
-    def _next_reference_entry_time(
-        current_time: datetime,
-        timeframe_seconds: int,
-    ) -> datetime:
-        current_timestamp = int(current_time.timestamp())
-        next_timestamp = (
-            (current_timestamp // timeframe_seconds) + 1
-        ) * timeframe_seconds
-
-        return datetime.fromtimestamp(next_timestamp, tz=UTC)
 
     @staticmethod
     def _normalize_time(value: datetime) -> datetime:

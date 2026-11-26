@@ -5,8 +5,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from app.cli.get_iq_option_demo_m5_signal import (
-    JsonArgumentParser,
     M5_SYMBOL,
+    JsonArgumentParser,
     error_to_payload,
     get_iq_option_demo_m5_signal,
     now_utc,

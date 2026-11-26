@@ -407,7 +407,8 @@ def get_iq_option_demo_m5_signal(
         else:
             actionability = "NOT_ACTIONABLE_LATE"
             reasons.append(
-                "The theoretical next M5 opening already passed after closed-candle confirmation; no order is executable."
+                "The theoretical next M5 opening already passed after closed-candle "
+                "confirmation; no order is executable."
             )
 
     payload_built_at = resolved_now()

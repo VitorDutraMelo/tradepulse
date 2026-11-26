@@ -8,7 +8,9 @@ from app.repositories.iq_option_demo_binary_signal_repository import (
     IqOptionDemoBinarySignalRepository,
 )
 
-DEFAULT_BINARY_SIGNAL_DIRECTORY = Path(__file__).resolve().parents[2] / "data/iq-option-demo-binary-signals"
+DEFAULT_BINARY_SIGNAL_DIRECTORY = (
+    Path(__file__).resolve().parents[2] / "data/iq-option-demo-binary-signals"
+)
 
 
 class JsonArgumentParser(argparse.ArgumentParser):

@@ -219,11 +219,13 @@ def get_iq_option_demo_m15_context(
             reasons.append("M15 close equals EMA 200.")
         elif latest_candle.close > ema200:
             reasons.append(
-                "M15 close is above EMA 200, but slope and confirmed structure do not fully confirm a bullish trend."
+                "M15 close is above EMA 200, but slope and confirmed structure do not "
+                "fully confirm a bullish trend."
             )
         else:
             reasons.append(
-                "M15 close is below EMA 200, but slope and confirmed structure do not fully confirm a bearish trend."
+                "M15 close is below EMA 200, but slope and confirmed structure do not "
+                "fully confirm a bearish trend."
             )
 
         reasons.append(
