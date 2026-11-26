@@ -47,6 +47,14 @@ import {
   type IqOptionDemoM5SignalResponse,
 } from "../iq-option-demo-analysis/iq-option-demo-m5-signal.schema";
 import {
+  iqOptionDemoM5ValidationHistoryResponseSchema,
+  iqOptionDemoM5ValidationRecordResponseSchema,
+  type IqOptionDemoM5ValidationHistoryRequest,
+  type IqOptionDemoM5ValidationHistoryResponse,
+  type IqOptionDemoM5ValidationRecordRequest,
+  type IqOptionDemoM5ValidationRecordResponse,
+} from "../iq-option-demo-analysis/iq-option-demo-m5-validation-history.schema";
+import {
   marketAnalysisResponseSchema,
   type MarketAnalysisRequest,
   type MarketAnalysisResponse,
@@ -95,11 +103,14 @@ export interface QuantEngineIqOptionDemoM5SignalClient {
     input: IqOptionDemoM5SignalRequest,
   ): Promise<IqOptionDemoM5SignalResponse>;
 }
+export interface QuantEngineIqOptionDemoM5ValidationHistoryClient {
+  listIqOptionDemoM5Validations(
+    input: IqOptionDemoM5ValidationHistoryRequest,
+  ): Promise<IqOptionDemoM5ValidationHistoryResponse>;
 
-export interface QuantEngineIqOptionDemoM5SignalClient {
-  getIqOptionDemoM5Signal(
-    input: IqOptionDemoM5SignalRequest,
-  ): Promise<IqOptionDemoM5SignalResponse>;
+  getIqOptionDemoM5ValidationRecord(
+    input: IqOptionDemoM5ValidationRecordRequest,
+  ): Promise<IqOptionDemoM5ValidationRecordResponse>;
 }
 export interface QuantEngineIqOptionSignalClient {
   prepareIqOptionSignal(
@@ -179,6 +190,7 @@ export class PythonQuantEngineClient
     QuantEngineIqOptionDemoCandleClient,
     QuantEngineIqOptionDemoM5SyncClient,
     QuantEngineIqOptionDemoM5SignalClient,
+    QuantEngineIqOptionDemoM5ValidationHistoryClient,
     QuantEngineIqOptionSignalClient,
     QuantEngineIqOptionDemoAnalysisClient,
     QuantEngineIqOptionDemoHistoryClient,
@@ -291,7 +303,7 @@ export class PythonQuantEngineClient
   ): Promise<IqOptionDemoM5SignalResponse> {
     const rawPayload = await this.runCli([
       "-m",
-      "app.cli.get_iq_option_demo_m5_signal",
+      "app.cli.get_iq_option_demo_m5_signal_with_m15",
       "--symbol",
       input.symbol,
     ]);
@@ -307,6 +319,55 @@ export class PythonQuantEngineClient
 
     return parsedPayload.data;
   }
+
+  async listIqOptionDemoM5Validations(
+    input: IqOptionDemoM5ValidationHistoryRequest,
+  ): Promise<IqOptionDemoM5ValidationHistoryResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_m5_validation_history",
+      "--limit",
+      String(input.limit),
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoM5ValidationHistoryResponseSchema.safeParse(
+        rawPayload,
+      );
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option DEMO M5 validation history payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
+  async getIqOptionDemoM5ValidationRecord(
+    input: IqOptionDemoM5ValidationRecordRequest,
+  ): Promise<IqOptionDemoM5ValidationRecordResponse> {
+    const rawPayload = await this.runCli([
+      "-m",
+      "app.cli.get_iq_option_demo_m5_validation_history",
+      "--record-id",
+      input.recordId,
+    ]);
+
+    const parsedPayload =
+      iqOptionDemoM5ValidationRecordResponseSchema.safeParse(
+        rawPayload,
+      );
+
+    if (!parsedPayload.success) {
+      throw new QuantEngineClientError(
+        "The Quant Engine returned an invalid IQ Option DEMO M5 validation record payload.",
+      );
+    }
+
+    return parsedPayload.data;
+  }
+
   async prepareIqOptionSignal(
     input: IqOptionSignalRequest,
   ): Promise<IqOptionSignalResponse> {

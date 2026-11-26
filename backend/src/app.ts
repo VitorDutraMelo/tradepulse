@@ -9,7 +9,9 @@ import { createIqOptionDemoBinarySignalHistoryRouter } from "./modules/iq-option
 import { CachedIqOptionDemoAnalysisClient } from "./modules/iq-option-demo-analysis/iq-option-demo-analysis-cache";
 import { createIqOptionDemoCandlesRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-candles.router";
 import { createIqOptionDemoM5SignalRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-m5-signal.router";
+import { CachedIqOptionDemoM5SignalClient } from "./modules/iq-option-demo-analysis/iq-option-demo-m5-signal-cache";
 import { createIqOptionDemoM5SyncRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-m5-sync.router";
+import { createIqOptionDemoM5ValidationHistoryRouter } from "./modules/iq-option-demo-analysis/iq-option-demo-m5-validation-history.router";
 import { IqOptionRealTradingSafetyPolicy } from "./modules/iq-option-real-trading/iq-option-real-trading.policy";
 import { createIqOptionRealTradingRouter } from "./modules/iq-option-real-trading/iq-option-real-trading.router";
 import { createIqOptionSignalRouter } from "./modules/iq-option-signals/iq-option-signal.router";
@@ -23,6 +25,7 @@ import {
   type QuantEngineIqOptionDemoHistoryClient,
   type QuantEngineIqOptionDemoM5SignalClient,
   type QuantEngineIqOptionDemoM5SyncClient,
+  type QuantEngineIqOptionDemoM5ValidationHistoryClient,
   type QuantEngineIqOptionSignalClient,
   type QuantEngineMarketDataClient,
 } from "./modules/market-analysis/python-quant-engine.client";
@@ -36,6 +39,7 @@ type AppDependencies = {
   quantEngineIqOptionDemoHistoryClient?: QuantEngineIqOptionDemoHistoryClient;
   quantEngineIqOptionDemoM5SignalClient?: QuantEngineIqOptionDemoM5SignalClient;
   quantEngineIqOptionDemoM5SyncClient?: QuantEngineIqOptionDemoM5SyncClient;
+  quantEngineIqOptionDemoM5ValidationHistoryClient?: QuantEngineIqOptionDemoM5ValidationHistoryClient;
   quantEngineIqOptionSignalClient?: QuantEngineIqOptionSignalClient;
   quantEngineMarketDataClient?: QuantEngineMarketDataClient;
 };
@@ -71,12 +75,19 @@ export function createApp(dependencies: AppDependencies = {}) {
     dependencies.quantEngineIqOptionDemoHistoryClient ??
     defaultQuantEngineClient;
 
+  const defaultIqOptionDemoM5SignalClient =
+    new CachedIqOptionDemoM5SignalClient(defaultQuantEngineClient);
+
   const quantEngineIqOptionDemoM5SignalClient =
     dependencies.quantEngineIqOptionDemoM5SignalClient ??
-    defaultQuantEngineClient;
+    defaultIqOptionDemoM5SignalClient;
 
   const quantEngineIqOptionDemoM5SyncClient =
     dependencies.quantEngineIqOptionDemoM5SyncClient ??
+    defaultQuantEngineClient;
+
+  const quantEngineIqOptionDemoM5ValidationHistoryClient =
+    dependencies.quantEngineIqOptionDemoM5ValidationHistoryClient ??
     defaultQuantEngineClient;
 
   const quantEngineIqOptionSignalClient =
@@ -153,6 +164,13 @@ export function createApp(dependencies: AppDependencies = {}) {
     "/api/v1/iq-option/demo/m5-signal",
     createIqOptionDemoM5SignalRouter(
       quantEngineIqOptionDemoM5SignalClient,
+    ),
+  );
+
+  app.use(
+    "/api/v1/iq-option/demo/m5-validations",
+    createIqOptionDemoM5ValidationHistoryRouter(
+      quantEngineIqOptionDemoM5ValidationHistoryClient,
     ),
   );
 

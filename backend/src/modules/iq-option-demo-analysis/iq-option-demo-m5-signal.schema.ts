@@ -13,6 +13,52 @@ const closedCandleSchema = z.object({
   closeTime: utcTimestampSchema,
 });
 
+const trackingSchema = z.object({
+  recordId: z.string().min(1).nullable(),
+  status: z.enum([
+    "NOT_APPLICABLE",
+    "UNAVAILABLE",
+    "PENDING",
+    "WIN",
+    "LOSS",
+    "DRAW",
+  ]),
+  settledAt: utcTimestampSchema.nullable(),
+  settlementPrice: z.number().nullable(),
+});
+
+const contextM15Schema = z.object({
+  state: z.enum(["UPDATED", "AWAITING_CONFIRMATION", "STALE"]),
+  trend: z.enum(["BULLISH", "BEARISH", "NEUTRAL"]),
+  timeframe: z.literal("15m"),
+  latestClosedCandle: closedCandleSchema,
+  expectedLatestCloseTime: utcTimestampSchema,
+  ema200: z.number().nullable(),
+  ema200ThreeCandlesAgo: z.number().nullable(),
+  structure: z.enum([
+    "HIGHER_HIGH_HIGHER_LOW",
+    "LOWER_HIGH_LOWER_LOW",
+    "MIXED",
+    "UNCONFIRMED",
+  ]),
+  dataQuality: z.object({
+    requiredClosedCandles: z.literal(250),
+    receivedClosedCandles: z.number().int().min(0),
+    candlesContiguous: z.boolean(),
+  }),
+  reasons: z.array(z.string().min(1)).min(1),
+  timing: z.object({
+    sourceCandleCloseTime: utcTimestampSchema,
+    observedClosedCandleAgeSeconds: z.number().min(0),
+    providerCallStartedAt: utcTimestampSchema,
+    providerCallCompletedAt: utcTimestampSchema,
+    providerCallDurationMs: z.number().min(0),
+    providerCallScope: z.literal(
+      "IQ Option connection, M15 candle retrieval and provider parsing",
+    ),
+  }),
+});
+
 export const iqOptionDemoM5SignalRequestSchema = z.object({
   symbol: z.literal("GBPUSD-OTC").default("GBPUSD-OTC"),
 });
@@ -44,16 +90,21 @@ export const iqOptionDemoM5SignalResponseSchema = z.object({
   decision: z.object({
     action: z.literal("WAIT"),
     candidateAction: z.enum(["CALL", "PUT", "WAIT"]),
+    m5CandidateAction: z.enum(["CALL", "PUT", "WAIT"]).optional(),
     actionability: z.enum([
       "NOT_ACTIONABLE_LATE",
       "NO_CANDIDATE",
       "DATA_NOT_CURRENT",
       "DATA_INSUFFICIENT",
+      "M15_CONTEXT_NOT_CURRENT",
+      "M15_CONTEXT_NOT_ALIGNED",
     ]),
     theoreticalEntryTime: utcTimestampSchema,
     theoreticalExpirationTime: utcTimestampSchema,
     reasons: z.array(z.string().min(1)).min(1),
   }),
+  contextM15: contextM15Schema.optional(),
+  tracking: trackingSchema.optional(),
   timing: z.object({
     clockSource: z.literal("application_utc_clock"),
     iqCandleAvailabilityAt: z.null(),
