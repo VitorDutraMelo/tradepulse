@@ -4,235 +4,104 @@
 
 # TradePulse
 
-**IQ Option PRACTICE market analysis · Explainable CALL / PUT / WAIT signals**
+**Análise técnica sobre dados reais da IQ Option PRACTICE · sinais CALL / PUT / WAIT explicáveis**
 
-![Status](https://img.shields.io/badge/status-active%20development-0f766e?style=for-the-badge) ![Mode](https://img.shields.io/badge/account-PRACTICE-16a34a?style=for-the-badge) ![Orders](https://img.shields.io/badge/orders-NONE-334155?style=for-the-badge)
-
-![React](https://img.shields.io/badge/React-149ECA?logo=react&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white) ![Node.js](https://img.shields.io/badge/Node.js-339933?logo=nodedotjs&logoColor=white) ![Python](https://img.shields.io/badge/Python-3776AB?logo=python&logoColor=white)
+![Status](https://img.shields.io/badge/status-em%20desenvolvimento-0f766e?style=for-the-badge) ![Conta](https://img.shields.io/badge/conta-PRACTICE-16a34a?style=for-the-badge) ![Ordens](https://img.shields.io/badge/ordens-NENHUMA-334155?style=for-the-badge)
 
 </div>
 
-## Overview
+> TradePulse é um **assistente de análise**. Ele **nunca executa ordens**, lê **somente a conta PRACTICE**
+> e não promete rentabilidade nem taxa de acerto. Toda metodologia de entrada e avaliação ainda é
+> **provisória e experimental** (ver [docs/SIGNAL_LIFECYCLE.md](docs/SIGNAL_LIFECYCLE.md)).
 
-TradePulse is a local, read-only dashboard that retrieves candlestick data through an **unofficial IQ Option integration in PRACTICE mode** and turns it into explainable technical analysis. The frontend displays the selected OTC pair, the latest analysis, indicator values, reference times, and the original JSON response.
+## Estado atual
 
-**Current scope:** technical research only. No orders are submitted, no real account is used, and no profits or signal accuracy are guaranteed.
+Blocos **A.1 + A.2 (coleta confiável e sincronizada)** implementados e testados automaticamente.
+A **validação com a IQ Option real ainda não foi feita** (depende das credenciais PRACTICE do
+proprietário — procedimento em [docs/TESTING.md](docs/TESTING.md#validação-real-pelo-proprietário)).
+Detalhes em [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) e no relatório
+[docs/reports/A1-A2-RELATORIO.md](docs/reports/A1-A2-RELATORIO.md).
 
-## Dashboard features
+## Arquitetura em uma linha
 
-| Feature | Current behavior |
-|---|---|
-| Signal | **🟢 CALL**, **🔴 PUT**, or **⚪ WAIT** |
-| Market | Select one of eight OTC symbols |
-| Timeframe | `1m` |
-| Candle request | `limit=120` |
-| Refresh | Every 60 seconds or manually |
-| Indicators | EMA 9, EMA 21, RSI 14, ADX 14, ATR 14 |
-| Explanation | Reasons returned by the backend |
-| Reference | Analysis, entry and expiration timestamps |
-| API inspection | View the JSON response |
-| Error handling | Show errors without inventing a signal |
-
-> The eight symbols are **frontend choices**, not a live list of open markets. A selectable asset is not necessarily available from the provider at that moment.
-
-### OTC symbols
-
-`EURUSD-OTC` · `GBPUSD-OTC` · `USDJPY-OTC` · `EURJPY-OTC` · `EURGBP-OTC` · `AUDUSD-OTC` · `USDCAD-OTC` · `AUDCAD-OTC`
-
-**Verified with returned PRACTICE candles:** `EURUSD-OTC` and `GBPUSD-OTC`. Other pairs require individual validation.
-
-## Signal logic
-
-| Signal | Conditions |
-|---|---|
-| **CALL** | EMA 9 above EMA 21, RSI within configured bullish range, ADX above configured minimum |
-| **PUT** | EMA 9 below EMA 21, RSI within configured bearish range, ADX above configured minimum |
-| **WAIT** | Required conditions are not aligned |
-
-ATR 14 is returned as a volatility indicator; this does **not** establish that ATR currently filters signals. The exact thresholds live in the Python engine, not in this README.
-
-## Architecture
-
-```mermaid
-flowchart LR
-    UI["React + TypeScript\nVite :5173"] -->|HTTP / JSON| API["Express + TypeScript\n:3001"]
-    API --> QE["Python Quant Engine"]
-    QE --> IQ["Unofficial IQ Option API\nPRACTICE candles"]
-    IQ --> QE
-    QE -->|Indicators + CALL / PUT / WAIT| API
-    API -->|Analysis JSON| UI
+```
+React/Vite (PWA) ──HTTP GET──▶ Express (127.0.0.1:3001) ──JSON-lines──▶ worker Python persistente ──websocket──▶ IQ Option PRACTICE
+                                 ├ agendador por fechamento de vela        └ 1 sessão · cache de candles · estratégias M1/M5/M15
+                                 └ publicação + validade calculada na leitura
 ```
 
-```text
-tradepulse/
-├── backend/                 # Express API
-├── frontend/                # React / Vite dashboard
-│   ├── src/App.tsx
-│   ├── src/api.ts
-│   └── src/style.css
-├── quant-engine/            # Python indicators and signal rules
-├── docs/
-│   └── images/
-│       └── tradepulse-candles.svg
-└── README.md
-```
+Detalhes: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-## REST API
+## Estratégias
 
-**Backend:** `http://localhost:3001`
+| Timeframe | Estratégia | Estado |
+|---|---|---|
+| M1 | EMA 9/21 · RSI 14 · ADX 14 · ATR 14 | Implementada; regras preservadas; sem validação estatística |
+| M5 | EMA 200 · RSI 14 · MACD 12/26/9 + contexto M15 (ADX/ATR como filtros, pendente de aprovação) | **Experimental**, somente GBPUSD-OTC, ação final sempre WAIT |
 
-```http
-GET /api/v1/health
-GET /api/v1/iq-option/demo/market-analysis?symbol=GBPUSD-OTC&timeframe=1m&limit=120
-```
+Regras completas: [docs/TRADING_STRATEGIES.md](docs/TRADING_STRATEGIES.md).
 
-Example PowerShell request:
+## Executar localmente (Windows / PowerShell)
 
-```powershell
-Invoke-RestMethod "http://localhost:3001/api/v1/iq-option/demo/market-analysis?symbol=GBPUSD-OTC&timeframe=1m&limit=120" | ConvertTo-Json -Depth 10
-```
-
-### Analysis response contract
-
-```json
-{
-  "symbol": "GBPUSD-OTC",
-  "timeframe": "1m",
-  "source": "iq_option_demo",
-  "accountMode": "PRACTICE",
-  "analysisAt": "2026-11-08T14:00:00Z",
-  "lastClosedCandle": {
-    "openTime": "2026-11-08T13:59:00Z",
-    "closeTime": "2026-11-08T14:00:00Z",
-    "ageSeconds": 0
-  },
-  "indicators": {
-    "ema9": 1.25,
-    "ema21": 1.251,
-    "rsi14": 42,
-    "adx14": 26,
-    "atr14": 0.0006
-  },
-  "action": "PUT",
-  "reference": {
-    "price": 1.2498,
-    "entryTime": "2026-11-08T14:01:00Z",
-    "expirationTime": "2026-11-08T14:02:00Z"
-  },
-  "reasons": ["Example bearish EMA, RSI and ADX conditions."],
-  "disclaimer": "Technical reference only. No IQ Option order was sent."
-}
-```
-
-*Illustrative payload: prices and timestamps above are not a verified live signal. A reference price is not a confirmed entry execution price.*
-
-## Local setup (Windows / PowerShell)
-
-### Requirements
-
-- Git
-- Node.js and npm
-- Python with `venv` and `pip`
-- Access to the required IQ Option PRACTICE data integration, subject to its terms and local restrictions
-
-### 1. Clone and install
+Requisitos: Node.js 24 (testado com 24.21), Python 3.14 (testado com 3.14.8), Git.
 
 ```powershell
 git clone https://github.com/VitorDutraMelo/tradepulse.git
 cd tradepulse
-
-cd backend
-npm install
-cd ..\frontend
-npm install
-cd ..\quant-engine
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -e .
+cd backend;  npm install; cd ..
+cd frontend; npm install; cd ..
+cd quant-engine
+py -3.14 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 cd ..
 ```
 
-If PowerShell blocks venv activation, use a process-scoped policy change only if permitted by your machine's security policy:
-
-```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
-```
-
-**Python note:** confirm additional dependencies and exact Python version requirements against `quant-engine` project files. The editable installation above is the expected starting point, not a guarantee that all external integration dependencies are available.
-
-### 2. Configure environment safely
-
-Copy `frontend/.env.example` to `frontend/.env.local` if needed, and use the existing API base URL setting from that example. The frontend must use `http://localhost:3001`.
-
-**IQ Option PRACTICE credentials must be provided only through the backend/quant-engine's existing terminal environment-variable flow.** Consult the implementation for the exact variable names. Never paste credentials into frontend code, Git, README, screenshots, or logs. Do not commit any `.env.local` file.
-
-### 3. Start the backend
-
-In a new PowerShell terminal:
-
-```powershell
-cd tradepulse\backend
-npm run dev
-```
-
-### 4. Start the frontend
-
-In another terminal:
-
-```powershell
-cd tradepulse\frontend
-npm run dev
-```
-
-Open **http://localhost:5173** (not `127.0.0.1:5173`, due to the configured CORS origin).
-
-### 5. Verify
-
-```powershell
-Invoke-RestMethod "http://localhost:3001/api/v1/health"
-```
-
-Select an OTC asset in the dashboard and request analysis. If the provider cannot return valid data, the UI should show an error rather than a fabricated signal.
-
-## Tests
+Credenciais PRACTICE **somente no terminal do backend** (nunca no frontend, no Git ou em capturas):
 
 ```powershell
 cd backend
-npm test
-npm run build
-
-cd ..\frontend
-npm run build
+$env:IQ_OPTION_DEMO_EMAIL = "seu-email"
+$env:IQ_OPTION_DEMO_PASSWORD = "sua-senha"
+npm run dev
 ```
 
-**Last reported local verification (8 Nov 2026):** backend **27/27 tests passed** and frontend Vite build succeeded. This is a local checkpoint, not a CI badge or a claim of validated trading performance.
+Em outro terminal:
 
-## Roadmap
+```powershell
+cd frontend
+npm run dev
+```
 
-- [x] React + TypeScript dashboard
-- [x] Express API and Python analysis integration
-- [x] PRACTICE candle-data retrieval for tested OTC pairs
-- [x] EMA 9/21, RSI 14, ADX 14, ATR 14
-- [x] Explainable CALL / PUT / WAIT API responses
-- [x] Local dashboard with asset selection and refresh
-- [ ] Validate all selectable symbols and provider reliability
-- [ ] Reliable entry/expiry outcome recording and historical evaluation
-- [ ] Reproducible backtests and out-of-sample validation
-- [ ] Documented, reproducible setup on another developer's computer
+Abra `http://127.0.0.1:5173`. O backend aceita conexões **apenas de loopback** (127.0.0.1).
 
-## Security and risk
+## Testes
 
-- **Read-only:** no trading-order execution.
-- **PRACTICE only:** no real-money account integration.
-- **Secrets:** credentials belong in local environment variables, never in Git.
-- **Unofficial integration:** availability, reliability and authorization must be independently evaluated.
-- **Financial risk:** technical indicators do not guarantee profit. Binary options may be restricted or prohibited for retail users in some jurisdictions, including the UK.
+```powershell
+cd quant-engine; .\.venv\Scripts\python.exe -m pytest; .\.venv\Scripts\python.exe -m ruff check .
+cd ..\backend;  npm test; npm run typecheck; npm run build
+cd ..\frontend; npm run typecheck; npm run build
+```
 
----
+Resultados atuais e limites da validação: [docs/TESTING.md](docs/TESTING.md).
 
-<div align="center">
+## Documentação
 
-**TradePulse — Build signals you can inspect, not promises you cannot verify.**
+| Documento | Conteúdo |
+|---|---|
+| [CHANGELOG.md](CHANGELOG.md) | Histórico de mudanças |
+| [docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md) | O que está implementado, testado, validado e bloqueado |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Componentes e fluxo de dados |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Blocos e ordem de execução |
+| [docs/TRADING_STRATEGIES.md](docs/TRADING_STRATEGIES.md) | Regras M1, M5 e M15 |
+| [docs/DATA_INTEGRITY.md](docs/DATA_INTEGRITY.md) | Velas fechadas, relógio, cache, atualidade |
+| [docs/SIGNAL_LIFECYCLE.md](docs/SIGNAL_LIFECYCLE.md) | Entrada, expiração, tolerância e estados |
+| [docs/API_CONTRACTS.md](docs/API_CONTRACTS.md) | Endpoints e contratos |
+| [docs/TESTING.md](docs/TESTING.md) | Testes e validação real |
+| [docs/SECURITY.md](docs/SECURITY.md) | PRACTICE, credenciais, rede, conta REAL |
+| [docs/adr/](docs/adr/) | Decisões arquiteturais |
+| [docs/audits/](docs/audits/) | Auditorias A.0 (referência histórica) |
 
-</div>
+## Risco
+
+Indicadores técnicos não garantem lucro. Opções binárias podem ser restritas ou proibidas em algumas
+jurisdições. A integração com a IQ Option é **não oficial** e pode parar de funcionar sem aviso.
