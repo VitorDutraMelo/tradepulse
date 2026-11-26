@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GatewayError, type GatewayResponse, type GatewayWorker } from "./gateway-worker";
-import { LiveAnalysisService, StrategyUnavailableError } from "./live-analysis.service";
+import {
+  decisionDiagnostics,
+  LiveAnalysisService,
+  StrategyUnavailableError,
+} from "./live-analysis.service";
 
 const MINUTE = 60_000;
 
@@ -352,5 +356,19 @@ describe("LiveAnalysisService", () => {
       code: "LIVE_SUBSCRIPTION_LIMIT",
     });
     live.stop();
+  });
+});
+
+describe("decisionDiagnostics", () => {
+  it("records which M5 rule blocked a candidate without changing it", () => {
+    const payload = m5Payload(T0, "CALL") as unknown as Record<string, unknown>;
+    (payload.decision as Record<string, unknown>).actionability = "M15_CONTEXT_NOT_ALIGNED";
+    payload.contextM15 = { state: "UPDATED", trend: "NEUTRAL", structure: "MIXED" };
+
+    expect(decisionDiagnostics(payload)).toMatchObject({
+      actionability: "M15_CONTEXT_NOT_ALIGNED",
+      contextM15: { trend: "NEUTRAL", structure: "MIXED" },
+      dataQuality: { candlesContiguous: true },
+    });
   });
 });

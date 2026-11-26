@@ -91,6 +91,11 @@ async function main(): Promise<void> {
           action: publication.signal.action,
           status: publication.signal.status,
           timeliness: publication.signal.timeliness,
+          // Why the experimental M5 engine waited (null for M1).
+          actionability: publication.analysis?.decision?.actionability ?? null,
+          m15Trend: publication.analysis?.contextM15?.trend ?? null,
+          m15Structure: publication.analysis?.contextM15?.structure ?? null,
+          candlesContiguous: publication.analysis?.dataQuality?.candlesContiguous ?? null,
         });
         console.log(
           `${publication.candleId} published ${publication.timing.totalLatencyFromCloseMs} ms after close ` +
@@ -128,6 +133,13 @@ async function main(): Promise<void> {
       workerStartsAfter: statusAfter?.gateway?.workerStarts ?? null,
       errors: errors.length,
       staleShownAsCurrent: staleShownAsCurrent.length,
+      m5WaitCauses: rows
+        .filter((row) => row.timeframe === "5m")
+        .reduce<Record<string, number>>((counts, row) => {
+          const key = String(row.actionability ?? "UNKNOWN");
+          counts[key] = (counts[key] ?? 0) + 1;
+          return counts;
+        }, {}),
     },
     errors: errors.slice(0, 200),
     statusAfter,
@@ -147,6 +159,7 @@ async function main(): Promise<void> {
     `- Latency close → publication (boundary publications): median ${report.summary.latencyMs.median} ms · p95 ${report.summary.latencyMs.p95} ms · max ${report.summary.latencyMs.max} ms`,
     `- Successful IQ logins: before ${report.summary.loginsBefore} · after ${report.summary.loginsAfter} · worker starts ${report.summary.workerStartsAfter}`,
     `- Errors observed: ${errors.length} · previous candle shown as current: ${staleShownAsCurrent.length}`,
+    `- M5 engine outcome by cause: ${JSON.stringify(report.summary.m5WaitCauses)}`,
     "",
     "| Candle | Published | Latency (ms) | Attempts | Action | Status |",
     "|---|---|---|---|---|---|",

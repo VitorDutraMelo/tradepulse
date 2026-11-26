@@ -520,6 +520,7 @@ export class LiveAnalysisService {
       engineAction: publication.extracted.engineAction,
       timing: publication.timing,
       observedQuote: publication.observedQuote,
+      diagnostics: decisionDiagnostics(publication.payload),
       experimental: true,
     };
 
@@ -664,4 +665,32 @@ export class LiveAnalysisService {
       nextReconnectAt: session.nextReconnectAt ?? status.nextRestartAt ?? null,
     };
   }
+}
+
+/**
+ * Which rule stopped a decision. Used to measure, with real data, why the
+ * experimental M5 engine stays in WAIT (no rule is changed by this).
+ */
+export function decisionDiagnostics(payload: Record<string, unknown>): Record<string, unknown> {
+  const decision = payload.decision as Record<string, unknown> | undefined;
+  const context = payload.contextM15 as Record<string, unknown> | undefined;
+
+  return {
+    actionability: decision?.actionability ?? null,
+    m5CandidateAction: decision?.m5CandidateAction ?? decision?.candidateAction ?? null,
+    dataQuality: payload.dataQuality ?? null,
+    contextM15: context
+      ? {
+          state: context.state ?? null,
+          trend: context.trend ?? null,
+          structure: context.structure ?? null,
+          dataQuality: context.dataQuality ?? null,
+        }
+      : null,
+    firstReason: Array.isArray(decision?.reasons)
+      ? decision.reasons[0]
+      : Array.isArray(payload.reasons)
+        ? payload.reasons[0]
+        : null,
+  };
 }
